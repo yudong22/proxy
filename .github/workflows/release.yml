@@ -90,7 +90,7 @@ jobs:
           echo "Using OpenRouter model: $MODEL"
 
           # Generate changelog for commits since previous tag
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
 
           if [ -n "$PREVIOUS_TAG" ]; then
             echo "Generating AI changelog from $PREVIOUS_TAG to ${{ steps.version.outputs.tag }}"
@@ -151,7 +151,7 @@ jobs:
             if [ -z "$CHANGELOG" ] || [ "$CHANGELOG" = "null" ]; then
               echo "Warning: AI changelog generation failed, using commit list instead" >&2
               echo "API response: $RESPONSE" >&2
-              CHANGELOG="## Commits\n\n$(git log \"${PREVIOUS_TAG}..HEAD\" --pretty=format:'- %s')"
+              CHANGELOG="## Commits\n\n$(git log "${PREVIOUS_TAG}..HEAD" --pretty=format:'- %s')"
             fi
           else
             echo "No previous tag found, using commit list"
