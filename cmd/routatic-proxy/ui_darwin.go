@@ -237,8 +237,8 @@ Use the tray icon to reopen the window or quit entirely.`,
 			if stopProxy != nil {
 				_ = stopProxy()
 			}
+			cancel() // trigger context cancellation so deferred cleanup runs
 			tray.Quit()
-			os.Exit(0)
 		}()
 
 		// ── 5. Start proxy ──────────────────────────────────────────

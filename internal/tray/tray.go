@@ -1,6 +1,10 @@
 //go:build darwin
 
 // Package tray manages the macOS system tray icon and menu.
+//
+// NOTE: Run must be called exactly once per process. The package-level
+// menu item variables (mStatus, mStart, etc.) are populated during Run's
+// onReady callback and are not safe for concurrent use across multiple calls.
 package tray
 
 import (
@@ -38,22 +42,22 @@ func onReady(cb Callbacks) {
 	systray.SetTooltip("routatic-proxy")
 	setIcon(false) // start with stopped icon
 
-	mStatus = systray.AddMenuItem("● 已停止", "")
+	mStatus = systray.AddMenuItem("● Stopped", "")
 	mStatus.Disable()
 	systray.AddSeparator()
 
-	mOpen = systray.AddMenuItem("打开控制台…", "")
+	mOpen = systray.AddMenuItem("Open Console...", "")
 	systray.AddSeparator()
 
-	mStart = systray.AddMenuItem("启动代理", "")
-	mStop = systray.AddMenuItem("停止代理", "")
+	mStart = systray.AddMenuItem("Start Proxy", "")
+	mStop = systray.AddMenuItem("Stop Proxy", "")
 	mStop.Hide()
 	systray.AddSeparator()
 
-	mAutostart = systray.AddMenuItemCheckbox("开机自启", "", false)
+	mAutostart = systray.AddMenuItemCheckbox("Start on Boot", "", false)
 	systray.AddSeparator()
 
-	mQuit = systray.AddMenuItem("退出", "")
+	mQuit = systray.AddMenuItem("Quit", "")
 
 	// Set initial state safely now that menu items are created
 	SetRunning(cb.InitiallyRunning)
@@ -101,12 +105,12 @@ func SetRunning(running bool) {
 	}
 	if running {
 		setIcon(true)
-		mStatus.SetTitle("● 运行中")
+		mStatus.SetTitle("● Running")
 		mStart.Hide()
 		mStop.Show()
 	} else {
 		setIcon(false)
-		mStatus.SetTitle("● 已停止")
+		mStatus.SetTitle("● Stopped")
 		mStop.Hide()
 		mStart.Show()
 	}
