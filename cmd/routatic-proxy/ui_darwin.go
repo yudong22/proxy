@@ -6,25 +6,59 @@ package main
 #cgo CFLAGS: -x objective-c
 #cgo LDFLAGS: -framework Cocoa
 #import <Cocoa/Cocoa.h>
+#import <objc/runtime.h>
 
 void triggerOpenWindow();
+
+// The webview-go library creates a delegate class named "WebviewNSWindowDelegate"
+// that only implements windowWillClose:. The default windowShouldClose: would
+// let the user close the window, which triggers on_window_will_close →
+// on_window_destroyed → terminate() → stop_run_loop() — and that kills the
+// NSApp run loop that the system tray depends on. We add a windowShouldClose:
+// method to that same class that hides the window instead of closing it.
+__attribute__((constructor))
+static void InstallHideOnCloseSwizzle(void) {
+    Class cls = objc_lookUpClass("WebviewNSWindowDelegate");
+    if (cls == Nil) {
+        // The class is created lazily on the first webview creation. That's
+        // fine: openWebview() will install the swizzle the first time it
+        // builds a webview (see installHideOnCloseSwizzleIfNeeded below).
+        return;
+    }
+    SEL sel = @selector(windowShouldClose:);
+    if (class_getInstanceMethod(cls, sel) != NULL) {
+        return; // already installed
+    }
+    IMP impl = imp_implementationWithBlock(^(id self, SEL _cmd, id sender) {
+        // Hide the window instead of closing it. The window reference is
+        // reachable from the webview via the delegate's "webview" associated
+        // object, but for simplicity we just order out the key window — that
+        // is the window the user clicked on.
+        NSWindow *win = [NSApp keyWindow];
+        if (win == nil) {
+            // Fall back to the main window if -keyWindow returned nil.
+            win = [NSApp mainWindow];
+        }
+        if (win != nil) {
+            [win orderOut:nil];
+        }
+        return NO; // veto the close; window stays alive
+    });
+    class_addMethod(cls, sel, impl, "c@:@");
+}
+
+// installHideOnCloseSwizzleIfNeeded must be called on the main thread AFTER
+// the webview has been created (since the WebviewNSWindowDelegate class is
+// created at that point). Re-runs the constructor logic in case the class
+// was not yet registered when the constructor fired.
+static inline void installHideOnCloseSwizzleIfNeeded(void) {
+    InstallHideOnCloseSwizzle();
+}
 
 static inline void DispatchOpenWindow() {
     dispatch_async(dispatch_get_main_queue(), ^{
         triggerOpenWindow();
     });
-}
-
-extern void goWindowWillClose();
-
-static inline void registerWindowCloseObserver(void* windowPtr) {
-    NSWindow* win = (__bridge NSWindow*)windowPtr;
-    [[NSNotificationCenter defaultCenter] addObserverForName:NSWindowWillCloseNotification
-                                                      object:win
-                                                       queue:[NSOperationQueue mainQueue]
-                                                  usingBlock:^(NSNotification *note) {
-        goWindowWillClose();
-    }];
 }
 
 static inline void makeWindowKeyAndActive(void* windowPtr) {
@@ -92,20 +126,6 @@ var (
 	setupMenusOnce sync.Once
 )
 
-//export goWindowWillClose
-func goWindowWillClose() {
-	wvMu.Lock()
-	wv := currentWv
-	if wv == nil {
-		wvMu.Unlock()
-		return
-	}
-	currentWv = nil
-	wvMu.Unlock()
-
-	wv.Destroy()
-}
-
 //export triggerOpenWindow
 func triggerOpenWindow() {
 	openWebview()
@@ -129,9 +149,12 @@ func openWebview() {
 		C.setupMacMenus()
 	})
 
-	// Register window close observer
+	// Intercept the windowShouldClose: selector on the webview's delegate so
+	// the red close button only HIDES the window instead of destroying it.
+	// Destroying would tear down the WKWebView and trigger stop_run_loop(),
+	// which kills the NSApp run loop that the system tray depends on.
 	winPtr := currentWv.Window()
-	C.registerWindowCloseObserver(winPtr)
+	C.installHideOnCloseSwizzleIfNeeded()
 	C.makeWindowKeyAndActive(winPtr)
 
 	currentWv.Navigate(globalGUIURL)
