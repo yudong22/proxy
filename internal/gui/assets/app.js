@@ -760,7 +760,7 @@ function executeCommand(action) {
       document.querySelector('[data-tab="settings"]').click();
       break;
     case 'refresh':
-      refreshAll();
+      debouncedRefresh();
       break;
   }
 }

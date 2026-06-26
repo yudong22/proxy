@@ -867,6 +867,10 @@ input:checked + .toggle-slider::before {
   color: var(--text-muted);
 }
 
+.command-item.hidden {
+  display: none;
+}
+
 /* ── Sortable Table Headers ───────────────────────────────────── */
 .sortable {
   cursor: pointer;
