@@ -197,6 +197,7 @@ Use the tray icon to reopen the window or quit entirely.`,
 		proxyErrCh := make(chan error, 1)
 		var isProxyRunning bool
 		var proxySrvMu sync.Mutex
+		var guiSrv *gui.Server
 
 		startProxy := func() error {
 			proxySrvMu.Lock()
@@ -215,12 +216,24 @@ Use the tray icon to reopen the window or quit entirely.`,
 			}
 
 			isProxyRunning = true
+			if guiSrv != nil {
+				guiSrv.SetProxyRunning(true)
+			}
+			tray.SetRunning(true)
+
 			go func() {
-				if err := proxySrv.Start(); err != nil && err != http.ErrServerClosed {
+				err := proxySrv.Start()
+				proxySrvMu.Lock()
+				isProxyRunning = false
+				proxySrvMu.Unlock()
+
+				if guiSrv != nil {
+					guiSrv.SetProxyRunning(false)
+				}
+				tray.SetRunning(false)
+
+				if err != nil && err != http.ErrServerClosed {
 					slog.Error("proxy server stopped with error", "error", err)
-					proxySrvMu.Lock()
-					isProxyRunning = false
-					proxySrvMu.Unlock()
 					proxyErrCh <- err
 				}
 			}()
@@ -235,6 +248,11 @@ Use the tray icon to reopen the window or quit entirely.`,
 				return nil
 			}
 			isProxyRunning = false
+			if guiSrv != nil {
+				guiSrv.SetProxyRunning(false)
+			}
+			tray.SetRunning(false)
+
 			shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer shutdownCancel()
 			return proxySrv.Shutdown(shutdownCtx)
@@ -250,7 +268,7 @@ Use the tray icon to reopen the window or quit entirely.`,
 		}
 
 		// ── 6. Start GUI HTTP server ────────────────────────────────
-		guiSrv := gui.New(gui.Options{
+		guiSrv = gui.New(gui.Options{
 			History:      proxySrv.History,
 			Metrics:      proxySrv.Metrics(),
 			AtomicConfig: atomic,
