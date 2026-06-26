@@ -116,7 +116,7 @@ func setIcon(running bool) {
 	if running {
 		systray.SetTitle("▶")
 	} else {
-		systray.SetTitle("⚡")
+		systray.SetTitle("⏸")
 	}
 }
 
