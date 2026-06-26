@@ -353,17 +353,99 @@ function fmtDuration(ms) {
 /* ── Proxy Config Form ─────────────────────────────────────────── */
 let currentProxyConfig = null;
 
+// Map of config field paths to element IDs for loading and saving.
+// Each entry: [jsonPath, elementId, type, transform]
+const CONFIG_FIELDS = [
+  // Server
+  ['host', 'cfg-host', 'string'],
+  ['port', 'cfg-port', 'int'],
+  ['api_key', 'cfg-global-key', 'string'],
+  ['hot_reload', 'cfg-hot-reload', 'bool'],
+
+  // OpenCode Go
+  ['opencode_go.base_url', 'cfg-go-base-url', 'string'],
+  ['opencode_go.anthropic_base_url', 'cfg-go-anthropic-url', 'string'],
+  ['opencode_go.api_key', 'cfg-go-api-key', 'string'],
+  ['opencode_go.timeout_ms', 'cfg-go-timeout', 'int'],
+  ['opencode_go.stream_timeout_ms', 'cfg-go-stream-timeout', 'int'],
+
+  // OpenCode Zen
+  ['opencode_zen.base_url', 'cfg-zen-base-url', 'string'],
+  ['opencode_zen.anthropic_base_url', 'cfg-zen-anthropic-url', 'string'],
+  ['opencode_zen.responses_base_url', 'cfg-zen-responses-url', 'string'],
+  ['opencode_zen.gemini_base_url', 'cfg-zen-gemini-url', 'string'],
+  ['opencode_zen.api_key', 'cfg-zen-api-key', 'string'],
+  ['opencode_zen.timeout_ms', 'cfg-zen-timeout', 'int'],
+  ['opencode_zen.stream_timeout_ms', 'cfg-zen-stream-timeout', 'int'],
+
+  // AWS Bedrock
+  ['aws_bedrock.base_url', 'cfg-bedrock-base-url', 'string'],
+  ['aws_bedrock.anthropic_base_url', 'cfg-bedrock-anthropic-url', 'string'],
+  ['aws_bedrock.api_key', 'cfg-bedrock-api-key', 'string'],
+  ['aws_bedrock.project_id', 'cfg-bedrock-project-id', 'string'],
+  ['aws_bedrock.timeout_ms', 'cfg-bedrock-timeout', 'int'],
+  ['aws_bedrock.stream_timeout_ms', 'cfg-bedrock-stream-timeout', 'int'],
+
+  // Logging
+  ['logging.level', 'cfg-log-level', 'string'],
+];
+
+// Deep-set a value in an object by dot-separated path.
+function deepSet(obj, path, value) {
+  const parts = path.split('.');
+  let cur = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (!cur[parts[i]] || typeof cur[parts[i]] !== 'object') cur[parts[i]] = {};
+    cur = cur[parts[i]];
+  }
+  cur[parts[parts.length - 1]] = value;
+}
+
+// Deep-get a value from an object by dot-separated path.
+function deepGet(obj, path) {
+  return path.split('.').reduce((o, k) => (o != null ? o[k] : undefined), obj);
+}
+
+// Read a field from the form and produce its typed value (or undefined if unchanged).
+function readFieldValue(field) {
+  const el = document.getElementById(field[1]);
+  if (!el) return undefined;
+  const raw = el.value !== undefined ? el.value : '';
+  if (field[2] === 'bool') {
+    const v = el.checked;
+    // Compare with current config to detect actual changes
+    const current = deepGet(currentProxyConfig, field[0]);
+    return v === !!current ? undefined : v;
+  }
+  if (field[2] === 'int') {
+    const v = raw.trim() === '' ? undefined : parseInt(raw, 10);
+    const current = deepGet(currentProxyConfig, field[0]);
+    return v === current ? undefined : v;
+  }
+  // string
+  const v = raw;
+  const current = deepGet(currentProxyConfig, field[0]);
+  return v === (current || '') ? undefined : v;
+}
+
 async function loadProxyConfig() {
   try {
     const r = await fetch('/api/proxy/config');
     if (!r.ok) return;
     currentProxyConfig = await r.json();
-    if (currentProxyConfig) {
-      document.getElementById('cfg-opencode-go-key').value = currentProxyConfig.opencode_go?.api_key || '';
-      document.getElementById('cfg-opencode-zen-key').value = currentProxyConfig.opencode_zen?.api_key || '';
-      document.getElementById('cfg-global-key').value = currentProxyConfig.api_key || '';
-      document.getElementById('cfg-host').value = currentProxyConfig.host || '';
-      document.getElementById('cfg-port').value = currentProxyConfig.port || '';
+    if (!currentProxyConfig) return;
+
+    for (const [path, id, type] of CONFIG_FIELDS) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      const val = deepGet(currentProxyConfig, path);
+      if (type === 'bool') {
+        el.checked = !!val;
+      } else if (type === 'int') {
+        el.value = val != null ? val : '';
+      } else {
+        el.value = val || '';
+      }
     }
   } catch (e) {
     console.error('Failed to load proxy config:', e);
@@ -372,45 +454,51 @@ async function loadProxyConfig() {
 
 async function saveProxyConfig() {
   if (!currentProxyConfig) {
-    showSaveStatus(t('save.unloaded'), 'error');
+    showSaveStatus('Config not loaded, cannot save', 'error');
     return;
   }
 
   const saveBtn = document.getElementById('btn-save-cfg');
   saveBtn.disabled = true;
-  saveBtn.textContent = t('status.saving');
+  saveBtn.textContent = 'Saving...';
 
-  // Update local copy
-  currentProxyConfig.api_key = document.getElementById('cfg-global-key').value.trim();
+  // Build a patch object with only changed fields.
+  const patch = {};
+  for (const field of CONFIG_FIELDS) {
+    const v = readFieldValue(field);
+    if (v !== undefined) {
+      deepSet(patch, field[0], v);
+    }
+  }
 
-  if (!currentProxyConfig.opencode_go) currentProxyConfig.opencode_go = {};
-  currentProxyConfig.opencode_go.api_key = document.getElementById('cfg-opencode-go-key').value.trim();
-
-  if (!currentProxyConfig.opencode_zen) currentProxyConfig.opencode_zen = {};
-  currentProxyConfig.opencode_zen.api_key = document.getElementById('cfg-opencode-zen-key').value.trim();
-
-  currentProxyConfig.host = document.getElementById('cfg-host').value.trim() || '127.0.0.1';
-  currentProxyConfig.port = parseInt(document.getElementById('cfg-port').value, 10) || 3456;
+  // If nothing changed, no-op.
+  if (Object.keys(patch).length === 0) {
+    showSaveStatus('No changes to save', 'success');
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save & Apply Config';
+    return;
+  }
 
   try {
     const r = await fetch('/api/proxy/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(currentProxyConfig)
+      body: JSON.stringify(patch)
     });
 
     if (r.ok) {
-      showSaveStatus(t('status.saveOk'), 'success');
-      await refreshAll();
+      showSaveStatus('Config saved successfully!', 'success');
+      // Reload the full config from the server to stay in sync.
+      await loadProxyConfig();
     } else {
       const txt = await r.text();
-      showSaveStatus(t('status.saveFail') + txt, 'error');
+      showSaveStatus('Save failed: ' + txt, 'error');
     }
   } catch (e) {
-    showSaveStatus(t('status.networkError'), 'error');
+    showSaveStatus('Network error, save failed', 'error');
   } finally {
     saveBtn.disabled = false;
-    saveBtn.textContent = t('btn.save');
+    saveBtn.textContent = 'Save & Apply Config';
   }
 }
 

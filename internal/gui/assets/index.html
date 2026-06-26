@@ -11,14 +11,14 @@
   <header class="header">
     <div class="header-left">
       <div class="logo">
-        <span class="logo-icon">⚡</span>
+        <span class="logo-icon">&#x26A1;</span>
         <span class="logo-text">routatic-proxy</span>
       </div>
     </div>
     <div class="header-right">
       <div class="status-badge" id="status-badge">
         <span class="status-dot" id="status-dot"></span>
-        <span id="status-text" data-i18n="status.checking">Checking…</span>
+        <span id="status-text" data-i18n="status.checking">Checking...</span>
       </div>
     </div>
   </header>
@@ -34,19 +34,19 @@
     <div class="metrics-grid">
       <div class="metric-card">
         <div class="metric-label" data-i18n="metric.total">Total Requests</div>
-        <div class="metric-value" id="m-total">—</div>
+        <div class="metric-value" id="m-total">--</div>
       </div>
       <div class="metric-card success">
         <div class="metric-label" data-i18n="metric.success">Success</div>
-        <div class="metric-value" id="m-success">—</div>
+        <div class="metric-value" id="m-success">--</div>
       </div>
       <div class="metric-card error">
         <div class="metric-label" data-i18n="metric.failed">Failed</div>
-        <div class="metric-value" id="m-failed">—</div>
+        <div class="metric-value" id="m-failed">--</div>
       </div>
       <div class="metric-card">
         <div class="metric-label" data-i18n="metric.streamed">Streamed</div>
-        <div class="metric-value" id="m-streamed">—</div>
+        <div class="metric-value" id="m-streamed">--</div>
       </div>
     </div>
 
@@ -129,51 +129,158 @@
             <div class="setting-desc" data-i18n="setting.languageDesc">Switch interface language</div>
           </div>
           <button class="btn btn-small" id="btn-lang-toggle" onclick="toggleLanguage()">
-            <span data-i18n="lang.toggle">中文</span>
+            <span data-i18n="lang.toggle">Chinese</span>
           </button>
         </div>
       </div>
     </div>
 
-    <div class="settings-title" style="margin: 20px 0 8px; font-size: 13px; font-weight: 600;" data-i18n="section.proxyConfig">Proxy Configuration</div>
+    <div class="settings-title" style="margin: 20px 0 8px; font-size: 13px; font-weight: 600;">Proxy Configuration</div>
     <div class="settings-form">
-      <div class="form-group">
-        <label for="cfg-opencode-go-key">OpenCode Go API Key</label>
-        <div class="input-with-btn">
-          <input type="password" id="cfg-opencode-go-key" data-i18n-placeholder="placeholder.envOrEmpty" placeholder="Use env var or leave empty">
-          <button type="button" class="btn-show-hide" onclick="togglePasswordVisibility('cfg-opencode-go-key')">👁️</button>
+      <fieldset class="form-section">
+        <legend>OpenCode Go</legend>
+        <div class="form-group">
+          <label for="cfg-go-base-url">Base URL</label>
+          <input type="text" id="cfg-go-base-url" placeholder="https://opencode.ai/zen/go/v1/chat/completions">
         </div>
-      </div>
-      <div class="form-group">
-        <label for="cfg-opencode-zen-key">OpenCode Zen API Key</label>
-        <div class="input-with-btn">
-          <input type="password" id="cfg-opencode-zen-key" data-i18n-placeholder="placeholder.envOrEmpty" placeholder="Use env var or leave empty">
-          <button type="button" class="btn-show-hide" onclick="togglePasswordVisibility('cfg-opencode-zen-key')">👁️</button>
+        <div class="form-group">
+          <label for="cfg-go-anthropic-url">Anthropic Base URL</label>
+          <input type="text" id="cfg-go-anthropic-url" placeholder="https://opencode.ai/zen/go/v1/messages">
         </div>
-      </div>
-      <div class="form-group">
-        <label for="cfg-global-key" data-i18n="label.globalKey">Global API Key (optional)</label>
-        <div class="input-with-btn">
-          <input type="password" id="cfg-global-key" data-i18n-placeholder="placeholder.notSet" placeholder="Not configured">
-          <button type="button" class="btn-show-hide" onclick="togglePasswordVisibility('cfg-global-key')">👁️</button>
+        <div class="form-group">
+          <label for="cfg-go-api-key">API Key</label>
+          <div class="input-with-btn">
+            <input type="password" id="cfg-go-api-key" placeholder="Use env var or leave empty">
+            <button type="button" class="btn-show-hide" onclick="togglePasswordVisibility('cfg-go-api-key')">&#x1F441;</button>
+          </div>
         </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group half">
-          <label for="cfg-host" data-i18n="label.host">Listen Address (Host)</label>
-          <input type="text" id="cfg-host" placeholder="127.0.0.1">
+        <div class="form-row">
+          <div class="form-group half">
+            <label for="cfg-go-timeout">Timeout (ms)</label>
+            <input type="number" id="cfg-go-timeout" placeholder="300000">
+          </div>
+          <div class="form-group half">
+            <label for="cfg-go-stream-timeout">Stream Timeout (ms)</label>
+            <input type="number" id="cfg-go-stream-timeout" placeholder="">
+          </div>
         </div>
-        <div class="form-group half">
-          <label for="cfg-port" data-i18n="label.port">Listen Port (Port)</label>
-          <input type="number" id="cfg-port" placeholder="3456">
+      </fieldset>
+
+      <fieldset class="form-section">
+        <legend>OpenCode Zen</legend>
+        <div class="form-group">
+          <label for="cfg-zen-base-url">Base URL</label>
+          <input type="text" id="cfg-zen-base-url" placeholder="https://opencode.ai/zen/v1/chat/completions">
         </div>
-      </div>
-      <button class="btn btn-primary" id="btn-save-cfg" onclick="saveProxyConfig()" style="margin-top: 10px; width: 100%;" data-i18n="btn.save">Save & Apply Config</button>
+        <div class="form-group">
+          <label for="cfg-zen-anthropic-url">Anthropic Base URL</label>
+          <input type="text" id="cfg-zen-anthropic-url" placeholder="https://opencode.ai/zen/v1/messages">
+        </div>
+        <div class="form-group">
+          <label for="cfg-zen-responses-url">Responses Base URL</label>
+          <input type="text" id="cfg-zen-responses-url" placeholder="https://opencode.ai/zen/v1/responses">
+        </div>
+        <div class="form-group">
+          <label for="cfg-zen-gemini-url">Gemini Base URL</label>
+          <input type="text" id="cfg-zen-gemini-url" placeholder="https://opencode.ai/zen/v1/models">
+        </div>
+        <div class="form-group">
+          <label for="cfg-zen-api-key">API Key</label>
+          <div class="input-with-btn">
+            <input type="password" id="cfg-zen-api-key" placeholder="Use env var or leave empty">
+            <button type="button" class="btn-show-hide" onclick="togglePasswordVisibility('cfg-zen-api-key')">&#x1F441;</button>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group half">
+            <label for="cfg-zen-timeout">Timeout (ms)</label>
+            <input type="number" id="cfg-zen-timeout" placeholder="300000">
+          </div>
+          <div class="form-group half">
+            <label for="cfg-zen-stream-timeout">Stream Timeout (ms)</label>
+            <input type="number" id="cfg-zen-stream-timeout" placeholder="">
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="form-section">
+        <legend>AWS Bedrock</legend>
+        <div class="form-group">
+          <label for="cfg-bedrock-base-url">Base URL</label>
+          <input type="text" id="cfg-bedrock-base-url" placeholder="">
+        </div>
+        <div class="form-group">
+          <label for="cfg-bedrock-anthropic-url">Anthropic Base URL</label>
+          <input type="text" id="cfg-bedrock-anthropic-url" placeholder="">
+        </div>
+        <div class="form-group">
+          <label for="cfg-bedrock-api-key">API Key</label>
+          <div class="input-with-btn">
+            <input type="password" id="cfg-bedrock-api-key" placeholder="Use env var or leave empty">
+            <button type="button" class="btn-show-hide" onclick="togglePasswordVisibility('cfg-bedrock-api-key')">&#x1F441;</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="cfg-bedrock-project-id">Project ID</label>
+          <input type="text" id="cfg-bedrock-project-id" placeholder="">
+        </div>
+        <div class="form-row">
+          <div class="form-group half">
+            <label for="cfg-bedrock-timeout">Timeout (ms)</label>
+            <input type="number" id="cfg-bedrock-timeout" placeholder="300000">
+          </div>
+          <div class="form-group half">
+            <label for="cfg-bedrock-stream-timeout">Stream Timeout (ms)</label>
+            <input type="number" id="cfg-bedrock-stream-timeout" placeholder="">
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="form-section">
+        <legend>Server</legend>
+        <div class="form-row">
+          <div class="form-group half">
+            <label for="cfg-host">Listen Host</label>
+            <input type="text" id="cfg-host" placeholder="127.0.0.1">
+          </div>
+          <div class="form-group half">
+            <label for="cfg-port">Listen Port</label>
+            <input type="number" id="cfg-port" placeholder="3456">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="cfg-global-key">Global API Key</label>
+          <div class="input-with-btn">
+            <input type="password" id="cfg-global-key" placeholder="Not configured">
+            <button type="button" class="btn-show-hide" onclick="togglePasswordVisibility('cfg-global-key')">&#x1F441;</button>
+          </div>
+        </div>
+        <div class="form-group checkbox-group">
+          <label>
+            <input type="checkbox" id="cfg-hot-reload"> Hot Reload
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset class="form-section">
+        <legend>Logging</legend>
+        <div class="form-group">
+          <label for="cfg-log-level">Log Level</label>
+          <select id="cfg-log-level">
+            <option value="debug">debug</option>
+            <option value="info" selected>info</option>
+            <option value="warn">warn</option>
+            <option value="error">error</option>
+          </select>
+        </div>
+      </fieldset>
+
+      <button class="btn btn-primary" id="btn-save-cfg" onclick="saveProxyConfig()" style="margin-top: 16px; width: 100%;">Save &amp; Apply Config</button>
       <div id="save-status" class="save-status"></div>
     </div>
 
     <div class="settings-footer">
-      <div class="port-info" id="port-info" data-i18n="port.info">Listening port: —</div>
+      <div class="port-info" id="port-info">Listening port: --</div>
     </div>
   </div>
 </div>
