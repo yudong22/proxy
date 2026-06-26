@@ -320,6 +320,8 @@ input:checked + .toggle-slider::before { transform: translateX(18px); }
   font-size: 13px;
   outline: none;
   transition: border-color 0.2s;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .form-group input:focus {
