@@ -280,6 +280,7 @@ Use the tray icon to reopen the window or quit entirely.`,
 					connectedToExisting = true
 					if guiSrv != nil {
 						guiSrv.SetProxyRunning(true)
+						guiSrv.SetConnectedToExisting(true)
 					}
 					tray.SetRunning(true)
 					return nil
@@ -291,6 +292,7 @@ Use the tray icon to reopen the window or quit entirely.`,
 			connectedToExisting = false
 			if guiSrv != nil {
 				guiSrv.SetProxyRunning(true)
+				guiSrv.SetConnectedToExisting(false)
 			}
 			tray.SetRunning(true)
 

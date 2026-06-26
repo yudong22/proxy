@@ -270,7 +270,7 @@ function renderHistory() {
   }
 
   tbody.innerHTML = filtered.map(h => `
-    <tr data-id="${h.start_time}" style="cursor: pointer;">
+    <tr data-id="${escapeHtml(h.id || h.start_time)}" style="cursor: pointer;">
       <td>${fmtTime(h.start_time)}</td>
       <td><span title="${escapeHtml(h.provider || '')}">${escapeHtml(h.model) || '—'}</span></td>
       <td><span class="badge badge-scene">${escapeHtml(h.scenario) || '—'}</span></td>
@@ -284,7 +284,7 @@ function renderHistory() {
   // Add click handlers for detail modal
   tbody.querySelectorAll('tr[data-id]').forEach(row => {
     row.addEventListener('click', function() {
-      const record = filtered.find(h => h.start_time === this.dataset.id);
+      const record = filtered.find(h => (h.id || h.start_time) === this.dataset.id);
       if (record) showHistoryDetail(record);
     });
   });
@@ -562,6 +562,10 @@ document.getElementById('history-search')?.addEventListener('input', function(e)
 let currentSort = { field: 'time', dir: 'desc' };
 
 document.querySelectorAll('.sortable').forEach(th => {
+  // Set initial aria-sort for the default (time desc)
+  if (th.dataset.sort === currentSort.field) {
+    th.setAttribute('aria-sort', 'descending');
+  }
   th.addEventListener('click', function() {
     const field = this.dataset.sort;
     if (currentSort.field === field) {
@@ -570,9 +574,13 @@ document.querySelectorAll('.sortable').forEach(th => {
       currentSort.field = field;
       currentSort.dir = 'desc';
     }
-    // Update visual indicators
-    document.querySelectorAll('.sortable').forEach(s => s.classList.remove('asc', 'desc'));
+    // Update visual indicators and aria-sort
+    document.querySelectorAll('.sortable').forEach(s => {
+      s.classList.remove('asc', 'desc');
+      s.removeAttribute('aria-sort');
+    });
     this.classList.add(currentSort.dir);
+    this.setAttribute('aria-sort', currentSort.dir === 'asc' ? 'ascending' : 'descending');
     renderHistory();
   });
 });
@@ -646,7 +654,28 @@ modal?.addEventListener('click', function(e) {
 /* ── Command Palette ───────────────────────────────────────────── */
 const commandPalette = document.getElementById('command-palette');
 const commandInput = document.getElementById('command-input');
+const commandListEl = document.getElementById('command-list');
 let commandPaletteOpen = false;
+let commandActiveIdx = -1;
+
+function getVisibleCommands() {
+  return [...document.querySelectorAll('.command-item')].filter(el => !el.classList.contains('hidden'));
+}
+
+function highlightCommand(index) {
+  // Remove previous selection
+  document.querySelectorAll('.command-item.selected').forEach(el => el.classList.remove('selected'));
+  const visible = getVisibleCommands();
+  if (visible.length === 0) { commandActiveIdx = -1; return; }
+  // Clamp index
+  if (index < 0) index = 0;
+  if (index >= visible.length) index = visible.length - 1;
+  commandActiveIdx = index;
+  const target = visible[index];
+  target.classList.add('selected');
+  target.scrollIntoView({ block: 'nearest' });
+  commandListEl.setAttribute('aria-activedescendant', target.id);
+}
 
 function openCommandPalette() {
   commandPaletteOpen = true;
@@ -654,11 +683,16 @@ function openCommandPalette() {
   commandInput.value = '';
   commandInput.focus();
   updateCommandList('');
+  // Highlight first visible item
+  highlightCommand(0);
 }
 
 function closeCommandPalette() {
   commandPaletteOpen = false;
   commandPalette.classList.remove('visible');
+  commandListEl.removeAttribute('aria-activedescendant');
+  document.querySelectorAll('.command-item.selected').forEach(el => el.classList.remove('selected'));
+  commandActiveIdx = -1;
 }
 
 function updateCommandList(query) {
@@ -666,8 +700,10 @@ function updateCommandList(query) {
   const q = query.toLowerCase();
   items.forEach(item => {
     const label = item.querySelector('.command-item-label').textContent.toLowerCase();
-    item.style.display = label.includes(q) ? '' : 'none';
+    item.classList.toggle('hidden', !label.includes(q));
   });
+  // Reset highlight to first visible item
+  highlightCommand(0);
 }
 
 commandInput?.addEventListener('input', function(e) {
@@ -675,11 +711,19 @@ commandInput?.addEventListener('input', function(e) {
 });
 
 commandInput?.addEventListener('keydown', function(e) {
+  const visible = getVisibleCommands();
   if (e.key === 'Escape') {
     closeCommandPalette();
+  } else if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    highlightCommand(commandActiveIdx + 1);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    highlightCommand(commandActiveIdx - 1);
   } else if (e.key === 'Enter') {
-    const selected = document.querySelector('.command-item.selected') || document.querySelector('.command-item:not([style*="display: none"])');
-    if (selected) executeCommand(selected.dataset.action);
+    const target = visible.length > 0 && commandActiveIdx >= 0 && commandActiveIdx < visible.length
+      ? visible[commandActiveIdx] : visible[0];
+    if (target) executeCommand(target.dataset.action);
     closeCommandPalette();
   }
 });
@@ -688,6 +732,11 @@ document.querySelectorAll('.command-item').forEach(item => {
   item.addEventListener('click', function() {
     executeCommand(this.dataset.action);
     closeCommandPalette();
+  });
+  item.addEventListener('mouseenter', function() {
+    const visible = getVisibleCommands();
+    const idx = visible.indexOf(this);
+    if (idx !== -1) highlightCommand(idx);
   });
 });
 
@@ -720,6 +769,13 @@ commandPalette?.addEventListener('click', function(e) {
   if (e.target === commandPalette) closeCommandPalette();
 });
 
+/* ── Debounce ─────────────────────────────────────────────────── */
+let refreshTimer = null;
+function debouncedRefresh() {
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(refreshAll, 300);
+}
+
 /* ── Keyboard Shortcuts ───────────────────────────────────────── */
 document.addEventListener('keydown', function(e) {
   // Command palette: Cmd/Ctrl + K
@@ -731,10 +787,10 @@ document.addEventListener('keydown', function(e) {
       openCommandPalette();
     }
   }
-  // Refresh: Cmd/Ctrl + R
+  // Refresh: Cmd/Ctrl + R (debounced)
   if ((e.metaKey || e.ctrlKey) && e.key === 'r') {
     e.preventDefault();
-    refreshAll();
+    debouncedRefresh();
   }
   // Search history: Cmd/Ctrl + F
   if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
@@ -750,10 +806,13 @@ document.addEventListener('keydown', function(e) {
     const tabs = ['overview', 'history', 'settings'];
     document.querySelector(`[data-tab="${tabs[parseInt(e.key) - 1]}"]`)?.click();
   }
-  // Escape to close modals
+  // Escape: close topmost overlay first
   if (e.key === 'Escape') {
-    if (commandPaletteOpen) closeCommandPalette();
-    if (modal.classList.contains('visible')) closeHistoryModal();
+    if (commandPaletteOpen) {
+      closeCommandPalette();
+    } else if (modal.classList.contains('visible')) {
+      closeHistoryModal();
+    }
   }
 });
 

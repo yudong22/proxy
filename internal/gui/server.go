@@ -172,6 +172,10 @@ func (s *Server) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 	if s.met != nil {
 		snap = s.met.GetSnapshot()
 	}
+	modelCounts := snap.ModelCounts
+	if modelCounts == nil {
+		modelCounts = make(map[string]int64)
+	}
 	resp := metricsResponse{
 		ProxyRunning:      s.proxyRunning.Load(),
 		ConnectedExisting: s.connectedExisting.Load(),
@@ -180,7 +184,7 @@ func (s *Server) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 		RequestsStreamed:  snap.RequestsStreamed,
 		RequestsSuccess:   snap.RequestsSuccess,
 		RequestsFailed:    snap.RequestsFailed,
-		ModelCounts:       snap.ModelCounts,
+		ModelCounts:       modelCounts,
 	}
 	writeJSON(w, resp)
 }

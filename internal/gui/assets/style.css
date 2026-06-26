@@ -69,7 +69,7 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   background: var(--bg);
   color: var(--text);
   font-size: var(--text-base);
@@ -589,19 +589,23 @@ input:checked + .toggle-slider::before {
 }
 
 .accordion-content {
-  max-height: 0;
+  display: grid;
+  grid-template-rows: 0fr;
   overflow: hidden;
-  transition: max-height 0.25s ease-out;
+  transition: grid-template-rows 0.25s ease-out;
 }
 
 .accordion-section.expanded .accordion-content {
-  max-height: 500px;
-  transition: max-height 0.35s ease-in;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.35s ease-in;
 }
 
 .accordion-inner {
   padding: 0 var(--space-4) var(--space-4);
 }
+
+/* ── Utility ─────────────────────────────────────────────────────── */
+.hidden { display: none !important; }
 
 /* ── Loading States ─────────────────────────────────────────────── */
 .loading-spinner {
