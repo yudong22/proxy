@@ -371,7 +371,7 @@ Use the tray icon to reopen the window or quit entirely.`,
 			},
 			OnAutostart: func(enabled bool) {
 				if enabled {
-					_ = daemon.EnableAutostart(configPath, cfg.Port)
+			_ = daemon.EnableAutostart(configPath, atomic.Get().Port)
 				} else {
 					_ = daemon.DisableAutostart()
 				}
