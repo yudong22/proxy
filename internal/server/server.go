@@ -33,8 +33,8 @@ type Server struct {
 	mu       sync.Mutex
 	logger   *slog.Logger
 	levelVar *slog.LevelVar
-	History  *history.History   // exported so the ui command can read it
-	metrics  *metrics.Metrics   // stored for Metrics() getter
+	History  *history.History // exported so the ui command can read it
+	metrics  *metrics.Metrics // stored for Metrics() getter
 }
 
 // NewServer creates a new proxy server.

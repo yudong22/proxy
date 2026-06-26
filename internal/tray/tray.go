@@ -38,22 +38,22 @@ func onReady(cb Callbacks) {
 	systray.SetTooltip("routatic-proxy")
 	setIcon(false) // start with stopped icon
 
-	mStatus    = systray.AddMenuItem("● 已停止", "")
+	mStatus = systray.AddMenuItem("● 已停止", "")
 	mStatus.Disable()
 	systray.AddSeparator()
 
-	mOpen      = systray.AddMenuItem("打开控制台…", "")
+	mOpen = systray.AddMenuItem("打开控制台…", "")
 	systray.AddSeparator()
 
-	mStart      = systray.AddMenuItem("启动代理", "")
-	mStop       = systray.AddMenuItem("停止代理", "")
+	mStart = systray.AddMenuItem("启动代理", "")
+	mStop = systray.AddMenuItem("停止代理", "")
 	mStop.Hide()
 	systray.AddSeparator()
 
-	mAutostart  = systray.AddMenuItemCheckbox("开机自启", "", false)
+	mAutostart = systray.AddMenuItemCheckbox("开机自启", "", false)
 	systray.AddSeparator()
 
-	mQuit       = systray.AddMenuItem("退出", "")
+	mQuit = systray.AddMenuItem("退出", "")
 
 	// Set initial state safely now that menu items are created
 	SetRunning(cb.InitiallyRunning)
@@ -63,18 +63,32 @@ func onReady(cb Callbacks) {
 		for {
 			select {
 			case <-mOpen.ClickedCh:
-				if cb.OnOpen != nil { cb.OnOpen() }
+				if cb.OnOpen != nil {
+					cb.OnOpen()
+				}
 			case <-mStart.ClickedCh:
-				if cb.OnStart != nil { cb.OnStart() }
+				if cb.OnStart != nil {
+					cb.OnStart()
+				}
 			case <-mStop.ClickedCh:
-				if cb.OnStop != nil { cb.OnStop() }
+				if cb.OnStop != nil {
+					cb.OnStop()
+				}
 			case <-mAutostart.ClickedCh:
 				checked := !mAutostart.Checked()
-				if checked { mAutostart.Check() } else { mAutostart.Uncheck() }
-				if cb.OnAutostart != nil { cb.OnAutostart(checked) }
+				if checked {
+					mAutostart.Check()
+				} else {
+					mAutostart.Uncheck()
+				}
+				if cb.OnAutostart != nil {
+					cb.OnAutostart(checked)
+				}
 			case <-mQuit.ClickedCh:
 				systray.Quit()
-				if cb.OnQuit != nil { cb.OnQuit() }
+				if cb.OnQuit != nil {
+					cb.OnQuit()
+				}
 			}
 		}
 	}()
@@ -116,7 +130,7 @@ func setIcon(running bool) {
 	if running {
 		systray.SetTitle("⚡")
 	} else {
-		systray.SetTitle("⚡")
+		systray.SetTitle("💤")
 	}
 }
 

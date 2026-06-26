@@ -35,14 +35,14 @@ static inline void makeWindowKeyAndActive(void* windowPtr) {
 
 static inline void setupMacMenus() {
     NSMenu *mainMenu = [[NSMenu alloc] init];
-    
+
     // 1. Application Menu
     NSMenuItem *appMenuItem = [[NSMenuItem alloc] init];
     [mainMenu addItem:appMenuItem];
     NSMenu *appMenu = [[NSMenu alloc] init];
     [appMenu addItemWithTitle:@"Quit RoutaticProxy" action:@selector(terminate:) keyEquivalent:@"q"];
     [appMenuItem setSubmenu:appMenu];
-    
+
     // 2. Edit Menu (Critical for Copy/Paste)
     NSMenuItem *editMenuItem = [[NSMenuItem alloc] init];
     [mainMenu addItem:editMenuItem];
@@ -55,7 +55,7 @@ static inline void setupMacMenus() {
     [editMenu addItemWithTitle:@"Paste" action:@selector(paste:) keyEquivalent:@"v"];
     [editMenu addItemWithTitle:@"Select All" action:@selector(selectAll:) keyEquivalent:@"a"];
     [editMenuItem setSubmenu:editMenu];
-    
+
     [NSApp setMainMenu:mainMenu];
 }
 */
@@ -185,11 +185,11 @@ Use the tray icon to reopen the window or quit entirely.`,
 					TimeoutMs:        300000,
 				},
 				OpenCodeZen: config.OpenCodeZenConfig{
-					BaseURL:            "https://opencode.ai/zen/v1/chat/completions",
-					AnthropicBaseURL:   "https://opencode.ai/zen/v1/messages",
-					ResponsesBaseURL:   "https://opencode.ai/zen/v1/responses",
-					GeminiBaseURL:      "https://opencode.ai/zen/v1/models",
-					TimeoutMs:          300000,
+					BaseURL:          "https://opencode.ai/zen/v1/chat/completions",
+					AnthropicBaseURL: "https://opencode.ai/zen/v1/messages",
+					ResponsesBaseURL: "https://opencode.ai/zen/v1/responses",
+					GeminiBaseURL:    "https://opencode.ai/zen/v1/models",
+					TimeoutMs:        300000,
 				},
 			}
 		}
@@ -371,7 +371,7 @@ Use the tray icon to reopen the window or quit entirely.`,
 			},
 			OnAutostart: func(enabled bool) {
 				if enabled {
-					_ = daemon.EnableAutostart(configPath, cfg.Port)
+					_ = daemon.EnableAutostart(configPath, atomic.Get().Port)
 				} else {
 					_ = daemon.DisableAutostart()
 				}
