@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>routatic-proxy 控制台</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <header class="header">
+    <div class="header-left">
+      <div class="logo">
+        <span class="logo-icon">⚡</span>
+        <span class="logo-text">routatic-proxy</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="status-badge" id="status-badge">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="status-text">检查中…</span>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="overview">概览</button>
+    <button class="tab" data-tab="history">历史请求</button>
+    <button class="tab" data-tab="settings">设置</button>
+  </nav>
+
+  <!-- 概览 Tab -->
+  <div class="tab-content active" id="tab-overview">
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-label">总请求数</div>
+        <div class="metric-value" id="m-total">—</div>
+      </div>
+      <div class="metric-card success">
+        <div class="metric-label">成功</div>
+        <div class="metric-value" id="m-success">—</div>
+      </div>
+      <div class="metric-card error">
+        <div class="metric-label">失败</div>
+        <div class="metric-value" id="m-failed">—</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">流式请求</div>
+        <div class="metric-value" id="m-streamed">—</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">模型调用分布</div>
+      <div class="model-list" id="model-list">
+        <div class="empty-state">暂无数据</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 历史请求 Tab -->
+  <div class="tab-content" id="tab-history">
+    <div class="history-toolbar">
+      <select class="filter-select" id="model-filter">
+        <option value="">全部模型</option>
+      </select>
+      <span class="history-count" id="history-count"></span>
+    </div>
+    <div class="table-wrap">
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th>时间</th>
+            <th>模型</th>
+            <th>场景</th>
+            <th>输入 Token</th>
+            <th>输出 Token</th>
+            <th>耗时</th>
+            <th>状态</th>
+          </tr>
+        </thead>
+        <tbody id="history-tbody">
+          <tr><td colspan="7" class="empty-state">暂无历史请求</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 设置 Tab -->
+  <div class="tab-content" id="tab-settings">
+    <div class="settings-list">
+      <div class="setting-item">
+        <div class="setting-info">
+          <div class="setting-label">代理服务</div>
+          <div class="setting-desc">启动或停止代理 HTTP 服务</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-proxy" onchange="toggleProxy(this)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="setting-item">
+        <div class="setting-info">
+          <div class="setting-label">开机自启</div>
+          <div class="setting-desc">登录时自动启动 routatic-proxy（launchd）</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-autostart" onchange="toggleAutostart(this)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="setting-item">
+        <div class="setting-info">
+          <div class="setting-label">桌面通知</div>
+          <div class="setting-desc">请求失败或切换模型时发送系统通知</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-notify" onchange="toggleNotify(this)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="settings-title" style="margin: 20px 0 8px; font-size: 13px; font-weight: 600;">服务代理配置</div>
+    <div class="settings-form">
+      <div class="form-group">
+        <label for="cfg-opencode-go-key">OpenCode Go API Key</label>
+        <div class="input-with-btn">
+          <input type="password" id="cfg-opencode-go-key" placeholder="使用环境变量或留空">
+          <button type="button" class="btn-show-hide" onclick="togglePasswordVisibility('cfg-opencode-go-key')">👁️</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="cfg-opencode-zen-key">OpenCode Zen API Key</label>
+        <div class="input-with-btn">
+          <input type="password" id="cfg-opencode-zen-key" placeholder="使用环境变量或留空">
+          <button type="button" class="btn-show-hide" onclick="togglePasswordVisibility('cfg-opencode-zen-key')">👁️</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="cfg-global-key">Global API Key (可选)</label>
+        <div class="input-with-btn">
+          <input type="password" id="cfg-global-key" placeholder="未配置">
+          <button type="button" class="btn-show-hide" onclick="togglePasswordVisibility('cfg-global-key')">👁️</button>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group half">
+          <label for="cfg-host">监听地址 (Host)</label>
+          <input type="text" id="cfg-host" placeholder="127.0.0.1">
+        </div>
+        <div class="form-group half">
+          <label for="cfg-port">监听端口 (Port)</label>
+          <input type="number" id="cfg-port" placeholder="3456">
+        </div>
+      </div>
+      <button class="btn btn-primary" id="btn-save-cfg" onclick="saveProxyConfig()" style="margin-top: 10px; width: 100%;">保存并应用配置</button>
+      <div id="save-status" class="save-status"></div>
+    </div>
+
+    <div class="settings-footer">
+      <div class="port-info" id="port-info">监听端口：—</div>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

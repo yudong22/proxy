@@ -770,6 +770,7 @@ func TestHandleMessages_StreamingMinimaxM3_UsesAnthropicEndpoint(t *testing.T) {
 		tokenCounter,
 		metrics.New(),
 		nil, // captureLogger
+		nil, // hist
 	)
 	handler.logger = slog.Default()
 
@@ -883,6 +884,7 @@ func TestHandleNonStreaming_GoAnthropicModel_ReplacesModelInBody(t *testing.T) {
 		tokenCounter,
 		metrics.New(),
 		nil, // captureLogger
+		nil, // hist
 	)
 	handler.logger = slog.Default()
 
@@ -999,6 +1001,7 @@ func TestHandleNonStreaming_ZenAnthropicModel_ReplacesModelInBody(t *testing.T) 
 		tokenCounter,
 		metrics.New(),
 		nil, // captureLogger
+		nil, // hist
 	)
 	handler.logger = slog.Default()
 
@@ -1362,6 +1365,7 @@ func TestHandleNonStreaming_ParentContextCanceled_No502(t *testing.T) {
 		tokenCounter,
 		m,
 		nil, // captureLogger
+		nil, // hist
 	)
 	handler.logger = slog.Default()
 
@@ -1443,6 +1447,7 @@ func TestHandleNonStreaming_ParentDeadlineExceeded_No502(t *testing.T) {
 		tokenCounter,
 		m,
 		nil, // captureLogger
+		nil, // hist
 	)
 	handler.logger = slog.Default()
 

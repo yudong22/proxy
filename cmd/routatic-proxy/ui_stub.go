@@ -1,0 +1,9 @@
+//go:build !darwin
+
+package main
+
+import "github.com/spf13/cobra"
+
+func addPlatformCommands(rootCmd *cobra.Command) {
+	// No-op for non-macOS platforms
+}

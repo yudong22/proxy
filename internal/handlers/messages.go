@@ -20,6 +20,7 @@ import (
 	"github.com/routatic/proxy/internal/config"
 	"github.com/routatic/proxy/internal/core"
 	"github.com/routatic/proxy/internal/debug"
+	"github.com/routatic/proxy/internal/history"
 	"github.com/routatic/proxy/internal/metrics"
 	"github.com/routatic/proxy/internal/middleware"
 	"github.com/routatic/proxy/internal/router"
@@ -45,6 +46,7 @@ type MessagesHandler struct {
 	requestIDGen        *middleware.RequestIDGenerator
 	metrics             *metrics.Metrics
 	captureLogger       *debug.CaptureLogger
+	history             *history.History // optional: nil means no GUI history
 }
 
 // responseWriter wraps http.ResponseWriter to track if headers were written.
@@ -202,6 +204,7 @@ func NewMessagesHandler(
 	tokenCounter *token.Counter,
 	metrics *metrics.Metrics,
 	captureLogger *debug.CaptureLogger,
+	hist *history.History,
 ) *MessagesHandler {
 	return &MessagesHandler{
 		client:              openCodeClient,
@@ -219,6 +222,7 @@ func NewMessagesHandler(
 		requestIDGen:        middleware.NewRequestIDGenerator(),
 		metrics:             metrics,
 		captureLogger:       captureLogger,
+		history:             hist,
 	}
 }
 
@@ -527,6 +531,18 @@ func (h *MessagesHandler) handleStreaming(
 				"cache_read_input_tokens", rw.usage.cacheReadInputTokens,
 				"cache_creation_input_tokens", rw.usage.cacheCreationInputTokens,
 			)
+			if h.history != nil {
+				h.history.Add(history.RequestRecord{
+					Model:        model.ModelID,
+					Provider:     model.Provider,
+					StartTime:    streamStart,
+					Duration:     latency,
+					InputTokens:  rw.usage.inputTokens,
+					OutputTokens: rw.usage.outputTokens,
+					Streaming:     true,
+					Success:      true,
+				})
+			}
 		}
 
 		// handleStreamError checks the error from a streaming attempt and
@@ -1060,6 +1076,16 @@ func (h *MessagesHandler) handleNonStreaming(
 		"attempts", result.Attempted,
 		"latency", latency,
 	)
+
+	if h.history != nil {
+		h.history.Add(history.RequestRecord{
+			Model:        result.ModelID,
+			StartTime:    startTime,
+			Duration:     latency,
+			Streaming:     false,
+			Success:      true,
+		})
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

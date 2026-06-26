@@ -1,4 +1,4 @@
-.PHONY: build run test clean install dist lint vet docker-up docker-stop
+.PHONY: build build-ui run test clean install dist lint vet docker-up docker-stop
 
 # Build variables
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -11,6 +11,10 @@ CMD = ./cmd/routatic-proxy
 
 build:
 	go build -ldflags "$(LDFLAGS)" -o bin/$(BINARY) $(CMD)
+	@ln -sf $(BINARY) bin/$(LEGACY_BINARY)
+
+build-ui:
+	CGO_ENABLED=1 go build -tags darwin -ldflags "$(LDFLAGS)" -o bin/$(BINARY) $(CMD)
 	@ln -sf $(BINARY) bin/$(LEGACY_BINARY)
 
 run:
