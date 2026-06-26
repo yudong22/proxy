@@ -167,6 +167,16 @@ async function refreshAll() {
   await Promise.all([refreshMetrics(), refreshHistory(), refreshConfig()]);
 }
 
+// Debounced refresh for manual triggers (keyboard shortcuts)
+let refreshDebounceTimer = null;
+function debouncedRefresh() {
+  if (refreshDebounceTimer) clearTimeout(refreshDebounceTimer);
+  refreshDebounceTimer = setTimeout(() => {
+    refreshAll();
+    refreshDebounceTimer = null;
+  }, 300);
+}
+
 /* ── /api/metrics ──────────────────────────────────────────────── */
 async function refreshMetrics() {
   try {
@@ -269,8 +279,11 @@ function renderHistory() {
     return;
   }
 
-  tbody.innerHTML = filtered.map(h => `
-    <tr data-id="${h.start_time}" style="cursor: pointer;">
+  tbody.innerHTML = filtered.map(h => {
+    // Use composite key to ensure uniqueness when multiple requests occur in the same second
+    const rowId = `${h.start_time}_${h.model || 'unknown'}_${h.duration_ms || 0}`;
+    return `
+    <tr data-id="${escapeHtml(rowId)}" style="cursor: pointer;">
       <td>${fmtTime(h.start_time)}</td>
       <td><span title="${escapeHtml(h.provider || '')}">${escapeHtml(h.model) || '—'}</span></td>
       <td><span class="badge badge-scene">${escapeHtml(h.scenario) || '—'}</span></td>
@@ -279,12 +292,17 @@ function renderHistory() {
       <td>${fmtDuration(h.duration_ms)}</td>
       <td><span class="badge ${h.success ? 'badge-success' : 'badge-error'}">${h.success ? t('badge.success') : t('badge.fail')}</span></td>
     </tr>
-  `).join('');
+  `}).join('');
 
   // Add click handlers for detail modal
   tbody.querySelectorAll('tr[data-id]').forEach(row => {
     row.addEventListener('click', function() {
-      const record = filtered.find(h => h.start_time === this.dataset.id);
+      const rowId = this.dataset.id;
+      // Parse the composite key to find the matching record
+      const record = filtered.find(h => {
+        const expectedId = `${h.start_time}_${h.model || 'unknown'}_${h.duration_ms || 0}`;
+        return expectedId === rowId;
+      });
       if (record) showHistoryDetail(record);
     });
   });
@@ -570,9 +588,13 @@ document.querySelectorAll('.sortable').forEach(th => {
       currentSort.field = field;
       currentSort.dir = 'desc';
     }
-    // Update visual indicators
-    document.querySelectorAll('.sortable').forEach(s => s.classList.remove('asc', 'desc'));
+    // Update visual indicators and aria-sort
+    document.querySelectorAll('.sortable').forEach(s => {
+      s.classList.remove('asc', 'desc');
+      s.setAttribute('aria-sort', 'none');
+    });
     this.classList.add(currentSort.dir);
+    this.setAttribute('aria-sort', currentSort.dir === 'asc' ? 'ascending' : 'descending');
     renderHistory();
   });
 });
@@ -664,10 +686,20 @@ function closeCommandPalette() {
 function updateCommandList(query) {
   const items = document.querySelectorAll('.command-item');
   const q = query.toLowerCase();
+  let firstVisible = null;
   items.forEach(item => {
     const label = item.querySelector('.command-item-label').textContent.toLowerCase();
-    item.style.display = label.includes(q) ? '' : 'none';
+    const isVisible = label.includes(q);
+    item.classList.toggle('hidden', !isVisible);
+    if (isVisible && !firstVisible) firstVisible = item;
   });
+  // Update aria-activedescendant to first visible item
+  const commandInput = document.getElementById('command-input');
+  if (firstVisible) {
+    commandInput?.setAttribute('aria-activedescendant', firstVisible.id);
+  } else {
+    commandInput?.setAttribute('aria-activedescendant', '');
+  }
 }
 
 commandInput?.addEventListener('input', function(e) {
@@ -678,7 +710,7 @@ commandInput?.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
     closeCommandPalette();
   } else if (e.key === 'Enter') {
-    const selected = document.querySelector('.command-item.selected') || document.querySelector('.command-item:not([style*="display: none"])');
+    const selected = document.querySelector('.command-item.selected') || document.querySelector('.command-item:not(.hidden)');
     if (selected) executeCommand(selected.dataset.action);
     closeCommandPalette();
   }
@@ -711,7 +743,7 @@ function executeCommand(action) {
       document.querySelector('[data-tab="settings"]').click();
       break;
     case 'refresh':
-      refreshAll();
+      debouncedRefresh();
       break;
   }
 }
@@ -734,7 +766,7 @@ document.addEventListener('keydown', function(e) {
   // Refresh: Cmd/Ctrl + R
   if ((e.metaKey || e.ctrlKey) && e.key === 'r') {
     e.preventDefault();
-    refreshAll();
+    debouncedRefresh();
   }
   // Search history: Cmd/Ctrl + F
   if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
@@ -750,10 +782,13 @@ document.addEventListener('keydown', function(e) {
     const tabs = ['overview', 'history', 'settings'];
     document.querySelector(`[data-tab="${tabs[parseInt(e.key) - 1]}"]`)?.click();
   }
-  // Escape to close modals
+  // Escape to close modals (use if-else to ensure only one action)
   if (e.key === 'Escape') {
-    if (commandPaletteOpen) closeCommandPalette();
-    if (modal.classList.contains('visible')) closeHistoryModal();
+    if (commandPaletteOpen) {
+      closeCommandPalette();
+    } else if (modal.classList.contains('visible')) {
+      closeHistoryModal();
+    }
   }
 });
 
