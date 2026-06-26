@@ -382,6 +382,19 @@ input:checked + .toggle-slider::before { transform: translateX(18px); }
   background: var(--accent-hover);
 }
 
+.btn-small {
+  padding: 4px 12px;
+  font-size: 12px;
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.btn-small:hover {
+  background: var(--border);
+}
+
 .save-status {
   margin-top: 10px;
   font-size: 12px;

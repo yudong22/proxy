@@ -320,16 +320,17 @@ Use the tray icon to reopen the window or quit entirely.`,
 			if !isProxyRunning {
 				return nil
 			}
+			wasConnected := connectedToExisting
 			isProxyRunning = false
+			connectedToExisting = false
 			if guiSrv != nil {
 				guiSrv.SetProxyRunning(false)
 				guiSrv.SetConnectedToExisting(false)
 			}
-			connectedToExisting = false
 			tray.SetRunning(false)
 
 			// Only shut down if we own the server (not connected to an external one).
-			if !connectedToExisting {
+			if !wasConnected {
 				shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer shutdownCancel()
 				return proxySrv.Shutdown(shutdownCtx)

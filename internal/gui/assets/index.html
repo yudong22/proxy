@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>routatic-proxy 控制台</title>
+<title>routatic-proxy Console</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -18,51 +18,51 @@
     <div class="header-right">
       <div class="status-badge" id="status-badge">
         <span class="status-dot" id="status-dot"></span>
-        <span id="status-text">检查中…</span>
+        <span id="status-text" data-i18n="status.checking">Checking…</span>
       </div>
     </div>
   </header>
 
   <nav class="tabs">
-    <button class="tab active" data-tab="overview">概览</button>
-    <button class="tab" data-tab="history">历史请求</button>
-    <button class="tab" data-tab="settings">设置</button>
+    <button class="tab active" data-tab="overview" data-i18n="tab.overview">Overview</button>
+    <button class="tab" data-tab="history" data-i18n="tab.history">History</button>
+    <button class="tab" data-tab="settings" data-i18n="tab.settings">Settings</button>
   </nav>
 
-  <!-- 概览 Tab -->
+  <!-- Overview Tab -->
   <div class="tab-content active" id="tab-overview">
     <div class="metrics-grid">
       <div class="metric-card">
-        <div class="metric-label">总请求数</div>
+        <div class="metric-label" data-i18n="metric.total">Total Requests</div>
         <div class="metric-value" id="m-total">—</div>
       </div>
       <div class="metric-card success">
-        <div class="metric-label">成功</div>
+        <div class="metric-label" data-i18n="metric.success">Success</div>
         <div class="metric-value" id="m-success">—</div>
       </div>
       <div class="metric-card error">
-        <div class="metric-label">失败</div>
+        <div class="metric-label" data-i18n="metric.failed">Failed</div>
         <div class="metric-value" id="m-failed">—</div>
       </div>
       <div class="metric-card">
-        <div class="metric-label">流式请求</div>
+        <div class="metric-label" data-i18n="metric.streamed">Streamed</div>
         <div class="metric-value" id="m-streamed">—</div>
       </div>
     </div>
 
     <div class="section">
-      <div class="section-title">模型调用分布</div>
+      <div class="section-title" data-i18n="section.modelDist">Model Distribution</div>
       <div class="model-list" id="model-list">
-        <div class="empty-state">暂无数据</div>
+        <div class="empty-state" data-i18n="empty.noData">No data yet</div>
       </div>
     </div>
   </div>
 
-  <!-- 历史请求 Tab -->
+  <!-- History Tab -->
   <div class="tab-content" id="tab-history">
     <div class="history-toolbar">
       <select class="filter-select" id="model-filter">
-        <option value="">全部模型</option>
+        <option value="" data-i18n="filter.allModels">All Models</option>
       </select>
       <span class="history-count" id="history-count"></span>
     </div>
@@ -70,98 +70,110 @@
       <table class="history-table">
         <thead>
           <tr>
-            <th>时间</th>
-            <th>模型</th>
-            <th>场景</th>
-            <th>输入 Token</th>
-            <th>输出 Token</th>
-            <th>耗时</th>
-            <th>状态</th>
+            <th data-i18n="th.time">Time</th>
+            <th data-i18n="th.model">Model</th>
+            <th data-i18n="th.scenario">Scenario</th>
+            <th data-i18n="th.inputTokens">Input Tokens</th>
+            <th data-i18n="th.outputTokens">Output Tokens</th>
+            <th data-i18n="th.duration">Duration</th>
+            <th data-i18n="th.status">Status</th>
           </tr>
         </thead>
         <tbody id="history-tbody">
-          <tr><td colspan="7" class="empty-state">暂无历史请求</td></tr>
+          <tr><td colspan="7" class="empty-state" data-i18n="empty.noHistory">No history yet</td></tr>
         </tbody>
       </table>
     </div>
   </div>
 
-  <!-- 设置 Tab -->
+  <!-- Settings Tab -->
   <div class="tab-content" id="tab-settings">
-    <div class="settings-list">
-      <div class="setting-item">
-        <div class="setting-info">
-          <div class="setting-label">代理服务</div>
-          <div class="setting-desc">启动或停止代理 HTTP 服务</div>
+    <div class="settings-header">
+      <div class="settings-list">
+        <div class="setting-item">
+          <div class="setting-info">
+            <div class="setting-label" data-i18n="setting.proxy">Proxy Service</div>
+            <div class="setting-desc" data-i18n="setting.proxyDesc">Start or stop the proxy HTTP service</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="toggle-proxy" onchange="toggleProxy(this)">
+            <span class="toggle-slider"></span>
+          </label>
         </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-proxy" onchange="toggleProxy(this)">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
 
-      <div class="setting-item">
-        <div class="setting-info">
-          <div class="setting-label">开机自启</div>
-          <div class="setting-desc">登录时自动启动 routatic-proxy（launchd）</div>
+        <div class="setting-item">
+          <div class="setting-info">
+            <div class="setting-label" data-i18n="setting.autostart">Start on Boot</div>
+            <div class="setting-desc" data-i18n="setting.autostartDesc">Auto-start routatic-proxy at login (launchd)</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="toggle-autostart" onchange="toggleAutostart(this)">
+            <span class="toggle-slider"></span>
+          </label>
         </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-autostart" onchange="toggleAutostart(this)">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
 
-      <div class="setting-item">
-        <div class="setting-info">
-          <div class="setting-label">桌面通知</div>
-          <div class="setting-desc">请求失败或切换模型时发送系统通知</div>
+        <div class="setting-item">
+          <div class="setting-info">
+            <div class="setting-label" data-i18n="setting.notify">Desktop Notifications</div>
+            <div class="setting-desc" data-i18n="setting.notifyDesc">Notify on failures or model switches</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="toggle-notify" onchange="toggleNotify(this)">
+            <span class="toggle-slider"></span>
+          </label>
         </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-notify" onchange="toggleNotify(this)">
-          <span class="toggle-slider"></span>
-        </label>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <div class="setting-label" data-i18n="setting.language">Language</div>
+            <div class="setting-desc" data-i18n="setting.languageDesc">Switch interface language</div>
+          </div>
+          <button class="btn btn-small" id="btn-lang-toggle" onclick="toggleLanguage()">
+            <span data-i18n="lang.toggle">中文</span>
+          </button>
+        </div>
       </div>
     </div>
 
-    <div class="settings-title" style="margin: 20px 0 8px; font-size: 13px; font-weight: 600;">服务代理配置</div>
+    <div class="settings-title" style="margin: 20px 0 8px; font-size: 13px; font-weight: 600;" data-i18n="section.proxyConfig">Proxy Configuration</div>
     <div class="settings-form">
       <div class="form-group">
         <label for="cfg-opencode-go-key">OpenCode Go API Key</label>
         <div class="input-with-btn">
-          <input type="password" id="cfg-opencode-go-key" placeholder="使用环境变量或留空">
+          <input type="password" id="cfg-opencode-go-key" data-i18n-placeholder="placeholder.envOrEmpty" placeholder="Use env var or leave empty">
           <button type="button" class="btn-show-hide" onclick="togglePasswordVisibility('cfg-opencode-go-key')">👁️</button>
         </div>
       </div>
       <div class="form-group">
         <label for="cfg-opencode-zen-key">OpenCode Zen API Key</label>
         <div class="input-with-btn">
-          <input type="password" id="cfg-opencode-zen-key" placeholder="使用环境变量或留空">
+          <input type="password" id="cfg-opencode-zen-key" data-i18n-placeholder="placeholder.envOrEmpty" placeholder="Use env var or leave empty">
           <button type="button" class="btn-show-hide" onclick="togglePasswordVisibility('cfg-opencode-zen-key')">👁️</button>
         </div>
       </div>
       <div class="form-group">
-        <label for="cfg-global-key">Global API Key (可选)</label>
+        <label for="cfg-global-key" data-i18n="label.globalKey">Global API Key (optional)</label>
         <div class="input-with-btn">
-          <input type="password" id="cfg-global-key" placeholder="未配置">
+          <input type="password" id="cfg-global-key" data-i18n-placeholder="placeholder.notSet" placeholder="Not configured">
           <button type="button" class="btn-show-hide" onclick="togglePasswordVisibility('cfg-global-key')">👁️</button>
         </div>
       </div>
       <div class="form-row">
         <div class="form-group half">
-          <label for="cfg-host">监听地址 (Host)</label>
+          <label for="cfg-host" data-i18n="label.host">Listen Address (Host)</label>
           <input type="text" id="cfg-host" placeholder="127.0.0.1">
         </div>
         <div class="form-group half">
-          <label for="cfg-port">监听端口 (Port)</label>
+          <label for="cfg-port" data-i18n="label.port">Listen Port (Port)</label>
           <input type="number" id="cfg-port" placeholder="3456">
         </div>
       </div>
-      <button class="btn btn-primary" id="btn-save-cfg" onclick="saveProxyConfig()" style="margin-top: 10px; width: 100%;">保存并应用配置</button>
+      <button class="btn btn-primary" id="btn-save-cfg" onclick="saveProxyConfig()" style="margin-top: 10px; width: 100%;" data-i18n="btn.save">Save & Apply Config</button>
       <div id="save-status" class="save-status"></div>
     </div>
 
     <div class="settings-footer">
-      <div class="port-info" id="port-info">监听端口：—</div>
+      <div class="port-info" id="port-info" data-i18n="port.info">Listening port: —</div>
     </div>
   </div>
 </div>
