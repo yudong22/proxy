@@ -120,7 +120,7 @@ func openWebview() {
 	}
 
 	currentWv = webview.New(true)
-	currentWv.SetTitle("routatic-proxy 控制台")
+	currentWv.SetTitle("routatic-proxy Console")
 	currentWv.SetSize(860, 560, webview.HintNone)
 
 	// Setup Mac copy/paste menu bar
@@ -227,6 +227,7 @@ Use the tray icon to reopen the window or quit entirely.`,
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
+		var startProxy func() error
 		var stopProxy func() error
 
 		sigCh := make(chan os.Signal, 1)
@@ -244,10 +245,11 @@ Use the tray icon to reopen the window or quit entirely.`,
 		// ── 5. Start proxy ──────────────────────────────────────────
 		proxyErrCh := make(chan error, 1)
 		var isProxyRunning bool
+		var connectedToExisting bool
 		var proxySrvMu sync.Mutex
 		var guiSrv *gui.Server
 
-		startProxy := func() error {
+		startProxy = func() error {
 			proxySrvMu.Lock()
 			defer proxySrvMu.Unlock()
 
@@ -263,9 +265,32 @@ Use the tray icon to reopen the window or quit entirely.`,
 				return fmt.Errorf("API Key is empty. Please set it in Settings first.")
 			}
 
+			// Probe for existing proxy instance before starting a new one.
+			healthURL := fmt.Sprintf("http://127.0.0.1:%d/health", currentCfg.Port)
+			client := &http.Client{Timeout: 2 * time.Second}
+			resp, probeErr := client.Get(healthURL)
+			if probeErr == nil {
+				resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					// External proxy already running — connect to it instead of starting a new one.
+					slog.Info("Existing proxy detected on port, connecting to it", "port", currentCfg.Port)
+					isProxyRunning = true
+					connectedToExisting = true
+					if guiSrv != nil {
+						guiSrv.SetProxyRunning(true)
+						guiSrv.SetConnectedToExisting(true)
+					}
+					tray.SetRunning(true)
+					return nil
+				}
+			}
+
+			// No existing proxy found — start a local instance.
 			isProxyRunning = true
+			connectedToExisting = false
 			if guiSrv != nil {
 				guiSrv.SetProxyRunning(true)
+				guiSrv.SetConnectedToExisting(false)
 			}
 			tray.SetRunning(true)
 
@@ -298,12 +323,18 @@ Use the tray icon to reopen the window or quit entirely.`,
 			isProxyRunning = false
 			if guiSrv != nil {
 				guiSrv.SetProxyRunning(false)
+				guiSrv.SetConnectedToExisting(false)
 			}
+			connectedToExisting = false
 			tray.SetRunning(false)
 
-			shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer shutdownCancel()
-			return proxySrv.Shutdown(shutdownCtx)
+			// Only shut down if we own the server (not connected to an external one).
+			if !connectedToExisting {
+				shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer shutdownCancel()
+				return proxySrv.Shutdown(shutdownCtx)
+			}
+			return nil
 		}
 
 		proxyInitiallyStarted := false
@@ -388,7 +419,7 @@ Use the tray icon to reopen the window or quit entirely.`,
 }
 
 func addPlatformCommands(rootCmd *cobra.Command) {
-	uiCmd.Flags().String("config", "", "配置文件路径")
+	uiCmd.Flags().String("config", "", "Config file path")
 	rootCmd.AddCommand(uiCmd)
 }
 

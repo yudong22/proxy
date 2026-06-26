@@ -34,17 +34,18 @@ type Config struct {
 
 // Server is the embedded HTTP server that backs the webview UI.
 type Server struct {
-	hist         *history.History
-	met          *metrics.Metrics
-	atomicCfg    *config.AtomicConfig
-	cfg          Config
-	cfgMu        sync.RWMutex
-	proxyRunning atomic.Bool
-	proxyPort    int
-	startProxy   func() error
-	stopProxy    func() error
-	srv          *http.Server
-	logger       *slog.Logger
+	hist              *history.History
+	met               *metrics.Metrics
+	atomicCfg         *config.AtomicConfig
+	cfg               Config
+	cfgMu             sync.RWMutex
+	proxyRunning      atomic.Bool
+	connectedExisting atomic.Bool
+	proxyPort         int
+	startProxy        func() error
+	stopProxy         func() error
+	srv               *http.Server
+	logger            *slog.Logger
 }
 
 // Options configures the GUI server.
@@ -96,6 +97,13 @@ func (s *Server) SetProxyRunning(running bool) {
 	s.proxyRunning.Store(running)
 }
 
+// SetConnectedToExisting updates whether the GUI is monitoring an external proxy
+// rather than controlling a locally-started one.
+func (s *Server) SetConnectedToExisting(connected bool) {
+	s.connectedExisting.Store(connected)
+}
+
+// getProxyPort returns the current proxy port from config if available.
 func (s *Server) getProxyPort() int {
 	if s.atomicCfg != nil {
 		return s.atomicCfg.Get().Port
@@ -128,7 +136,8 @@ func (s *Server) Start(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("gui server listen: %w", err)
 	}
 
-	s.srv = &http.Server{Handler: mux}
+	// Wrap with security headers middleware.
+	s.srv = &http.Server{Handler: securityHeadersMiddleware(mux)}
 	go func() {
 		if srvErr := s.srv.Serve(ln); srvErr != nil && srvErr != http.ErrServerClosed {
 			s.logger.Error("gui server error", "err", srvErr)
@@ -148,25 +157,27 @@ func (s *Server) Start(ctx context.Context) (string, error) {
 // ── API handlers ──────────────────────────────────────────────────────────────
 
 type metricsResponse struct {
-	ProxyRunning     bool             `json:"proxy_running"`
-	Port             int              `json:"port"`
-	RequestsReceived int64            `json:"requests_received"`
-	RequestsStreamed int64            `json:"requests_streamed"`
-	RequestsSuccess  int64            `json:"requests_success"`
-	RequestsFailed   int64            `json:"requests_failed"`
-	ModelCounts      map[string]int64 `json:"model_counts"`
+	ProxyRunning      bool             `json:"proxy_running"`
+	ConnectedExisting bool             `json:"connected_to_existing"`
+	Port              int              `json:"port"`
+	RequestsReceived  int64            `json:"requests_received"`
+	RequestsStreamed  int64            `json:"requests_streamed"`
+	RequestsSuccess   int64            `json:"requests_success"`
+	RequestsFailed    int64            `json:"requests_failed"`
+	ModelCounts       map[string]int64 `json:"model_counts"`
 }
 
 func (s *Server) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 	snap := s.met.GetSnapshot()
 	resp := metricsResponse{
-		ProxyRunning:     s.proxyRunning.Load(),
-		Port:             s.getProxyPort(),
-		RequestsReceived: snap.RequestsReceived,
-		RequestsStreamed: snap.RequestsStreamed,
-		RequestsSuccess:  snap.RequestsSuccess,
-		RequestsFailed:   snap.RequestsFailed,
-		ModelCounts:      snap.ModelCounts,
+		ProxyRunning:      s.proxyRunning.Load(),
+		ConnectedExisting: s.connectedExisting.Load(),
+		Port:              s.getProxyPort(),
+		RequestsReceived:  snap.RequestsReceived,
+		RequestsStreamed:  snap.RequestsStreamed,
+		RequestsSuccess:   snap.RequestsSuccess,
+		RequestsFailed:    snap.RequestsFailed,
+		ModelCounts:       snap.ModelCounts,
 	}
 	writeJSON(w, resp)
 }
@@ -297,6 +308,16 @@ func (s *Server) handleProxyConfig(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Validate essential fields before persisting.
+		if newCfg.Host == "" {
+			http.Error(w, "host is required", http.StatusBadRequest)
+			return
+		}
+		if newCfg.Port < 1 || newCfg.Port > 65535 {
+			http.Error(w, "port must be between 1 and 65535", http.StatusBadRequest)
+			return
+		}
+
 		// Save the config to disk
 		data, err := json.MarshalIndent(newCfg, "", "  ")
 		if err != nil {
@@ -326,4 +347,15 @@ func (s *Server) handleProxyConfig(w http.ResponseWriter, r *http.Request) {
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// securityHeadersMiddleware adds security headers to all responses.
+func securityHeadersMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Prevent MIME-type sniffing.
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		// Restrict scripts/styles to same origin (local GUI only).
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'")
+		next.ServeHTTP(w, r)
+	})
 }
