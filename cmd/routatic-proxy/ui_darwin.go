@@ -64,6 +64,7 @@ import "C"
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -262,7 +263,7 @@ Use the tray icon to reopen the window or quit entirely.`,
 			if currentCfg.APIKey == "" && len(currentCfg.APIKeys) == 0 &&
 				(currentCfg.OpenCodeGo.APIKey == "" || strings.Contains(currentCfg.OpenCodeGo.APIKey, "${")) &&
 				(currentCfg.OpenCodeZen.APIKey == "" || strings.Contains(currentCfg.OpenCodeZen.APIKey, "${")) {
-				return fmt.Errorf("API Key is empty. Please set it in Settings first.")
+				return fmt.Errorf("API Key is empty. Please set it in Settings first")
 			}
 
 			// Probe for existing proxy instance before starting a new one.
@@ -270,7 +271,8 @@ Use the tray icon to reopen the window or quit entirely.`,
 			client := &http.Client{Timeout: 2 * time.Second}
 			resp, probeErr := client.Get(healthURL)
 			if probeErr == nil {
-				resp.Body.Close()
+				_, _ = io.Copy(io.Discard, resp.Body)
+				_ = resp.Body.Close()
 				if resp.StatusCode == http.StatusOK {
 					// External proxy already running — connect to it instead of starting a new one.
 					slog.Info("Existing proxy detected on port, connecting to it", "port", currentCfg.Port)
