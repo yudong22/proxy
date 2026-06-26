@@ -17,6 +17,9 @@ build-ui:
 	CGO_ENABLED=1 go build -tags darwin -ldflags "$(LDFLAGS)" -o bin/$(BINARY) $(CMD)
 	@ln -sf $(BINARY) bin/$(LEGACY_BINARY)
 
+dmg: build-ui
+	@./scripts/build_dmg.sh "$(VERSION)"
+
 run:
 	go run -ldflags "$(LDFLAGS)" $(CMD)
 
