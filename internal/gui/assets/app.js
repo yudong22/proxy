@@ -243,9 +243,23 @@ async function refreshHistory() {
 
 function renderHistory() {
   const tbody = document.getElementById('history-tbody');
-  const filtered = currentFilter
+
+  // Apply filter
+  let filtered = currentFilter
     ? allHistory.filter(h => h.model === currentFilter)
     : allHistory;
+
+  // Apply search
+  if (searchQuery) {
+    filtered = filtered.filter(h => {
+      return (h.model || '').toLowerCase().includes(searchQuery) ||
+             (h.scenario || '').toLowerCase().includes(searchQuery) ||
+             (h.provider || '').toLowerCase().includes(searchQuery);
+    });
+  }
+
+  // Apply sort
+  filtered = sortHistory(filtered);
 
   document.getElementById('history-count').textContent =
     filtered.length + t('status.count') + (currentFilter ? t('status.filtered') : '');
@@ -256,7 +270,7 @@ function renderHistory() {
   }
 
   tbody.innerHTML = filtered.map(h => `
-    <tr>
+    <tr data-id="${h.start_time}" style="cursor: pointer;">
       <td>${fmtTime(h.start_time)}</td>
       <td><span title="${escapeHtml(h.provider || '')}">${escapeHtml(h.model) || '—'}</span></td>
       <td><span class="badge badge-scene">${escapeHtml(h.scenario) || '—'}</span></td>
@@ -266,6 +280,14 @@ function renderHistory() {
       <td><span class="badge ${h.success ? 'badge-success' : 'badge-error'}">${h.success ? t('badge.success') : t('badge.fail')}</span></td>
     </tr>
   `).join('');
+
+  // Add click handlers for detail modal
+  tbody.querySelectorAll('tr[data-id]').forEach(row => {
+    row.addEventListener('click', function() {
+      const record = filtered.find(h => h.start_time === this.dataset.id);
+      if (record) showHistoryDetail(record);
+    });
+  });
 }
 
 function updateModelFilter() {
@@ -528,6 +550,237 @@ function togglePasswordVisibility(id) {
   }
 }
 
+/* ── History Search ────────────────────────────────────────────── */
+let searchQuery = '';
+
+document.getElementById('history-search')?.addEventListener('input', function(e) {
+  searchQuery = e.target.value.toLowerCase().trim();
+  renderHistory();
+});
+
+/* ── History Sorting ───────────────────────────────────────────── */
+let currentSort = { field: 'time', dir: 'desc' };
+
+document.querySelectorAll('.sortable').forEach(th => {
+  th.addEventListener('click', function() {
+    const field = this.dataset.sort;
+    if (currentSort.field === field) {
+      currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+      currentSort.field = field;
+      currentSort.dir = 'desc';
+    }
+    // Update visual indicators
+    document.querySelectorAll('.sortable').forEach(s => s.classList.remove('asc', 'desc'));
+    this.classList.add(currentSort.dir);
+    renderHistory();
+  });
+});
+
+function sortHistory(history) {
+  return [...history].sort((a, b) => {
+    let aVal = a[currentSort.field];
+    let bVal = b[currentSort.field];
+    if (aVal == null) aVal = '';
+    if (bVal == null) bVal = '';
+    if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+    if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+    if (aVal < bVal) return currentSort.dir === 'asc' ? -1 : 1;
+    if (aVal > bVal) return currentSort.dir === 'asc' ? 1 : -1;
+    return 0;
+  });
+}
+
+/* ── History Detail Modal ──────────────────────────────────────── */
+const modal = document.getElementById('history-modal');
+const modalBody = document.getElementById('modal-body');
+const modalClose = document.getElementById('modal-close');
+
+function showHistoryDetail(record) {
+  modalBody.innerHTML = `
+    <div class="detail-row">
+      <span class="detail-label">Time</span>
+      <span class="detail-value">${fmtTime(record.start_time)}</span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Model</span>
+      <span class="detail-value">${escapeHtml(record.model || '—')}</span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Provider</span>
+      <span class="detail-value">${escapeHtml(record.provider || '—')}</span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Scenario</span>
+      <span class="detail-value">${escapeHtml(record.scenario || '—')}</span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Input Tokens</span>
+      <span class="detail-value">${record.input_tokens != null ? record.input_tokens.toLocaleString() : '—'}</span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Output Tokens</span>
+      <span class="detail-value">${record.output_tokens != null ? record.output_tokens.toLocaleString() : '—'}</span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Duration</span>
+      <span class="detail-value">${fmtDuration(record.duration_ms)}</span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Status</span>
+      <span class="detail-value" style="color: var(--${record.success ? 'success' : 'error'})">${record.success ? 'Success' : 'Failed'}</span>
+    </div>
+  `;
+  modal.classList.add('visible');
+}
+
+function closeHistoryModal() {
+  modal.classList.remove('visible');
+}
+
+modalClose?.addEventListener('click', closeHistoryModal);
+modal?.addEventListener('click', function(e) {
+  if (e.target === modal) closeHistoryModal();
+});
+
+/* ── Command Palette ───────────────────────────────────────────── */
+const commandPalette = document.getElementById('command-palette');
+const commandInput = document.getElementById('command-input');
+let commandPaletteOpen = false;
+
+function openCommandPalette() {
+  commandPaletteOpen = true;
+  commandPalette.classList.add('visible');
+  commandInput.value = '';
+  commandInput.focus();
+  updateCommandList('');
+}
+
+function closeCommandPalette() {
+  commandPaletteOpen = false;
+  commandPalette.classList.remove('visible');
+}
+
+function updateCommandList(query) {
+  const items = document.querySelectorAll('.command-item');
+  const q = query.toLowerCase();
+  items.forEach(item => {
+    const label = item.querySelector('.command-item-label').textContent.toLowerCase();
+    item.style.display = label.includes(q) ? '' : 'none';
+  });
+}
+
+commandInput?.addEventListener('input', function(e) {
+  updateCommandList(e.target.value);
+});
+
+commandInput?.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    closeCommandPalette();
+  } else if (e.key === 'Enter') {
+    const selected = document.querySelector('.command-item.selected') || document.querySelector('.command-item:not([style*="display: none"])');
+    if (selected) executeCommand(selected.dataset.action);
+    closeCommandPalette();
+  }
+});
+
+document.querySelectorAll('.command-item').forEach(item => {
+  item.addEventListener('click', function() {
+    executeCommand(this.dataset.action);
+    closeCommandPalette();
+  });
+});
+
+function executeCommand(action) {
+  switch (action) {
+    case 'start-proxy':
+      document.getElementById('toggle-proxy').checked = true;
+      toggleProxy(document.getElementById('toggle-proxy'));
+      break;
+    case 'stop-proxy':
+      document.getElementById('toggle-proxy').checked = false;
+      toggleProxy(document.getElementById('toggle-proxy'));
+      break;
+    case 'goto-overview':
+      document.querySelector('[data-tab="overview"]').click();
+      break;
+    case 'goto-history':
+      document.querySelector('[data-tab="history"]').click();
+      break;
+    case 'goto-settings':
+      document.querySelector('[data-tab="settings"]').click();
+      break;
+    case 'refresh':
+      refreshAll();
+      break;
+  }
+}
+
+commandPalette?.addEventListener('click', function(e) {
+  if (e.target === commandPalette) closeCommandPalette();
+});
+
+/* ── Keyboard Shortcuts ───────────────────────────────────────── */
+document.addEventListener('keydown', function(e) {
+  // Command palette: Cmd/Ctrl + K
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault();
+    if (commandPaletteOpen) {
+      closeCommandPalette();
+    } else {
+      openCommandPalette();
+    }
+  }
+  // Refresh: Cmd/Ctrl + R
+  if ((e.metaKey || e.ctrlKey) && e.key === 'r') {
+    e.preventDefault();
+    refreshAll();
+  }
+  // Search history: Cmd/Ctrl + F
+  if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+    const historyTab = document.getElementById('tab-history');
+    if (historyTab.classList.contains('active')) {
+      e.preventDefault();
+      document.getElementById('history-search')?.focus();
+    }
+  }
+  // Tab shortcuts: Cmd/Ctrl + 1/2/3
+  if ((e.metaKey || e.ctrlKey) && ['1', '2', '3'].includes(e.key)) {
+    e.preventDefault();
+    const tabs = ['overview', 'history', 'settings'];
+    document.querySelector(`[data-tab="${tabs[parseInt(e.key) - 1]}"]`)?.click();
+  }
+  // Escape to close modals
+  if (e.key === 'Escape') {
+    if (commandPaletteOpen) closeCommandPalette();
+    if (modal.classList.contains('visible')) closeHistoryModal();
+  }
+});
+
+/* ── Accordion Sections ────────────────────────────────────────── */
+function initAccordions() {
+  document.querySelectorAll('.accordion-header').forEach(header => {
+    header.addEventListener('click', function() {
+      const section = this.closest('.accordion-section');
+      const wasExpanded = section.classList.contains('expanded');
+
+      // Collapse all other sections (optional: remove for multi-expand)
+      document.querySelectorAll('.accordion-section').forEach(s => {
+        s.classList.remove('expanded');
+      });
+
+      // Toggle this section
+      if (!wasExpanded) {
+        section.classList.add('expanded');
+      }
+    });
+  });
+}
+
+// Initialize on load
+document.addEventListener('DOMContentLoaded', initAccordions);
+
 /* ── Boot ──────────────────────────────────────────────────────── */
 loadProxyConfig();
 startPolling();
+
