@@ -6,10 +6,13 @@ import "sync"
 const defaultMaxRecords = 1000
 
 // History is a thread-safe ring buffer of RequestRecord entries.
+// Uses head/tail indices for O(1) insert instead of O(n) slice shift.
 type History struct {
 	mu      sync.RWMutex
 	records []RequestRecord
-	cap     int
+	head    int // write position
+	count   int // number of records stored
+	cap     int // max capacity
 }
 
 // New creates a History that retains at most maxRecords entries.
@@ -19,22 +22,20 @@ func New(maxRecords int) *History {
 		maxRecords = defaultMaxRecords
 	}
 	return &History{
-		records: make([]RequestRecord, 0, maxRecords),
+		records: make([]RequestRecord, maxRecords),
 		cap:     maxRecords,
 	}
 }
 
 // Add appends a record to the history. If the buffer is full, the oldest
-// entry is evicted (ring-buffer behaviour).
+// entry is evicted (ring-buffer behaviour). O(1) time complexity.
 func (h *History) Add(r RequestRecord) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if len(h.records) >= h.cap {
-		// shift left, drop oldest
-		copy(h.records, h.records[1:])
-		h.records[len(h.records)-1] = r
-	} else {
-		h.records = append(h.records, r)
+	h.records[h.head] = r
+	h.head = (h.head + 1) % h.cap
+	if h.count < h.cap {
+		h.count++
 	}
 }
 
@@ -44,18 +45,14 @@ func (h *History) Last(n int) []RequestRecord {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	total := len(h.records)
-	if n <= 0 || n > total {
-		n = total
+	if n <= 0 || n > h.count {
+		n = h.count
 	}
-	// copy so the caller cannot mutate internal state
 	out := make([]RequestRecord, n)
+	// Iterate backwards from head-1 (most recent) to head-n (oldest of the n).
 	for i := 0; i < n; i++ {
-		out[i] = h.records[total-n+i]
-	}
-	// reverse to newest-first
-	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
-		out[i], out[j] = out[j], out[i]
+		idx := (h.head - 1 - i + h.cap) % h.cap
+		out[i] = h.records[idx]
 	}
 	return out
 }
@@ -64,5 +61,5 @@ func (h *History) Last(n int) []RequestRecord {
 func (h *History) Len() int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	return len(h.records)
+	return h.count
 }

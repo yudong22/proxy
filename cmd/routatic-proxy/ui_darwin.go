@@ -278,7 +278,6 @@ Use the tray icon to reopen the window or quit entirely.`,
 					connectedToExisting = true
 					if guiSrv != nil {
 						guiSrv.SetProxyRunning(true)
-						guiSrv.SetConnectedToExisting(true)
 					}
 					tray.SetRunning(true)
 					return nil
@@ -290,7 +289,6 @@ Use the tray icon to reopen the window or quit entirely.`,
 			connectedToExisting = false
 			if guiSrv != nil {
 				guiSrv.SetProxyRunning(true)
-				guiSrv.SetConnectedToExisting(false)
 			}
 			tray.SetRunning(true)
 
@@ -307,7 +305,11 @@ Use the tray icon to reopen the window or quit entirely.`,
 
 				if err != nil && err != http.ErrServerClosed {
 					slog.Error("proxy server stopped with error", "error", err)
-					proxyErrCh <- err
+					select {
+					case proxyErrCh <- err:
+					default:
+						// Channel already full or nobody listening — error was already logged above.
+					}
 				}
 			}()
 			return nil
@@ -325,7 +327,6 @@ Use the tray icon to reopen the window or quit entirely.`,
 			connectedToExisting = false
 			if guiSrv != nil {
 				guiSrv.SetProxyRunning(false)
-				guiSrv.SetConnectedToExisting(false)
 			}
 			tray.SetRunning(false)
 
@@ -411,7 +412,6 @@ Use the tray icon to reopen the window or quit entirely.`,
 			OnQuit: func() {
 				_ = stopProxy()
 				cancel()
-				os.Exit(0)
 			},
 		})
 
