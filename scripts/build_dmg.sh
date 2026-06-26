@@ -54,7 +54,7 @@ cat > "${CONTENTS_DIR}/Info.plist" <<EOF
     <key>CFBundleShortVersionString</key>
     <string>${VERSION_NO_V}</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>${VERSION_NO_V}</string>
     <key>LSMinimumSystemVersion</key>
     <string>10.15</string>
     <key>LSUIElement</key>
