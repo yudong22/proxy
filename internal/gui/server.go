@@ -96,6 +96,13 @@ func (s *Server) SetProxyRunning(running bool) {
 	s.proxyRunning.Store(running)
 }
 
+func (s *Server) getProxyPort() int {
+	if s.atomicCfg != nil {
+		return s.atomicCfg.Get().Port
+	}
+	return s.proxyPort
+}
+
 // Start starts the embedded HTTP server on a random localhost port and returns
 // the URL that the webview should load.
 func (s *Server) Start(ctx context.Context) (string, error) {
@@ -144,7 +151,7 @@ type metricsResponse struct {
 	ProxyRunning     bool             `json:"proxy_running"`
 	Port             int              `json:"port"`
 	RequestsReceived int64            `json:"requests_received"`
-	RequestsStreamed  int64            `json:"requests_streamed"`
+	RequestsStreamed int64            `json:"requests_streamed"`
 	RequestsSuccess  int64            `json:"requests_success"`
 	RequestsFailed   int64            `json:"requests_failed"`
 	ModelCounts      map[string]int64 `json:"model_counts"`
@@ -154,9 +161,9 @@ func (s *Server) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 	snap := s.met.GetSnapshot()
 	resp := metricsResponse{
 		ProxyRunning:     s.proxyRunning.Load(),
-		Port:             s.proxyPort,
+		Port:             s.getProxyPort(),
 		RequestsReceived: snap.RequestsReceived,
-		RequestsStreamed:  snap.RequestsStreamed,
+		RequestsStreamed: snap.RequestsStreamed,
 		RequestsSuccess:  snap.RequestsSuccess,
 		RequestsFailed:   snap.RequestsFailed,
 		ModelCounts:      snap.ModelCounts,
@@ -220,7 +227,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		if req.Autostart != nil {
 			s.cfg.Autostart = *req.Autostart
 			if *req.Autostart {
-				_ = daemon.EnableAutostart("", s.proxyPort)
+				_ = daemon.EnableAutostart("", s.getProxyPort())
 			} else {
 				_ = daemon.DisableAutostart()
 			}

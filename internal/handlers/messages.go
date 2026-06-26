@@ -539,7 +539,7 @@ func (h *MessagesHandler) handleStreaming(
 					Duration:     latency,
 					InputTokens:  rw.usage.inputTokens,
 					OutputTokens: rw.usage.outputTokens,
-					Streaming:     true,
+					Streaming:    true,
 					Success:      true,
 				})
 			}
@@ -1077,12 +1077,30 @@ func (h *MessagesHandler) handleNonStreaming(
 		"latency", latency,
 	)
 
+	var provider string
+	for _, m := range modelChain {
+		if m.ModelID == result.ModelID {
+			provider = m.Provider
+			break
+		}
+	}
+
+	var inputTokens, outputTokens int
+	var msgResp types.MessageResponse
+	if errUnmarshal := json.Unmarshal(responseBody, &msgResp); errUnmarshal == nil {
+		inputTokens = msgResp.Usage.InputTokens
+		outputTokens = msgResp.Usage.OutputTokens
+	}
+
 	if h.history != nil {
 		h.history.Add(history.RequestRecord{
 			Model:        result.ModelID,
+			Provider:     provider,
 			StartTime:    startTime,
 			Duration:     latency,
-			Streaming:     false,
+			InputTokens:  inputTokens,
+			OutputTokens: outputTokens,
+			Streaming:    false,
 			Success:      true,
 		})
 	}
