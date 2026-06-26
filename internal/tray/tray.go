@@ -119,3 +119,8 @@ func setIcon(running bool) {
 		systray.SetTitle("⚡")
 	}
 }
+
+// Quit terminates the systray loop and removes the icon.
+func Quit() {
+	systray.Quit()
+}

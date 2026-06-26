@@ -26,6 +26,38 @@ static inline void registerWindowCloseObserver(void* windowPtr) {
         goWindowWillClose();
     }];
 }
+
+static inline void makeWindowKeyAndActive(void* windowPtr) {
+    NSWindow* win = (__bridge NSWindow*)windowPtr;
+    [NSApp activateIgnoringOtherApps:YES];
+    [win makeKeyAndOrderFront:nil];
+}
+
+static inline void setupMacMenus() {
+    NSMenu *mainMenu = [[NSMenu alloc] init];
+    
+    // 1. Application Menu
+    NSMenuItem *appMenuItem = [[NSMenuItem alloc] init];
+    [mainMenu addItem:appMenuItem];
+    NSMenu *appMenu = [[NSMenu alloc] init];
+    [appMenu addItemWithTitle:@"Quit RoutaticProxy" action:@selector(terminate:) keyEquivalent:@"q"];
+    [appMenuItem setSubmenu:appMenu];
+    
+    // 2. Edit Menu (Critical for Copy/Paste)
+    NSMenuItem *editMenuItem = [[NSMenuItem alloc] init];
+    [mainMenu addItem:editMenuItem];
+    NSMenu *editMenu = [[NSMenu alloc] initWithTitle:@"Edit"];
+    [editMenu addItemWithTitle:@"Undo" action:@selector(undo:) keyEquivalent:@"z"];
+    [editMenu addItemWithTitle:@"Redo" action:@selector(redo:) keyEquivalent:@"Z"];
+    [editMenu addItem:[NSMenuItem separatorItem]];
+    [editMenu addItemWithTitle:@"Cut" action:@selector(cut:) keyEquivalent:@"x"];
+    [editMenu addItemWithTitle:@"Copy" action:@selector(copy:) keyEquivalent:@"c"];
+    [editMenu addItemWithTitle:@"Paste" action:@selector(paste:) keyEquivalent:@"v"];
+    [editMenu addItemWithTitle:@"Select All" action:@selector(selectAll:) keyEquivalent:@"a"];
+    [editMenuItem setSubmenu:editMenu];
+    
+    [NSApp setMainMenu:mainMenu];
+}
 */
 import "C"
 
@@ -53,9 +85,10 @@ import (
 )
 
 var (
-	globalGUIURL string
-	currentWv    webview.WebView
-	wvMu         sync.Mutex
+	globalGUIURL   string
+	currentWv      webview.WebView
+	wvMu           sync.Mutex
+	setupMenusOnce sync.Once
 )
 
 //export goWindowWillClose
@@ -80,6 +113,8 @@ func triggerOpenWindow() {
 func openWebview() {
 	wvMu.Lock()
 	if currentWv != nil {
+		winPtr := currentWv.Window()
+		C.makeWindowKeyAndActive(winPtr)
 		wvMu.Unlock()
 		return
 	}
@@ -88,9 +123,15 @@ func openWebview() {
 	currentWv.SetTitle("routatic-proxy 控制台")
 	currentWv.SetSize(860, 560, webview.HintNone)
 
+	// Setup Mac copy/paste menu bar
+	setupMenusOnce.Do(func() {
+		C.setupMacMenus()
+	})
+
 	// Register window close observer
 	winPtr := currentWv.Window()
 	C.registerWindowCloseObserver(winPtr)
+	C.makeWindowKeyAndActive(winPtr)
 
 	currentWv.Navigate(globalGUIURL)
 	wvMu.Unlock()
@@ -186,11 +227,18 @@ Use the tray icon to reopen the window or quit entirely.`,
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
+		var stopProxy func() error
+
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 		go func() {
 			<-sigCh
-			cancel()
+			slog.Info("Received signal, exiting...")
+			if stopProxy != nil {
+				_ = stopProxy()
+			}
+			tray.Quit()
+			os.Exit(0)
 		}()
 
 		// ── 5. Start proxy ──────────────────────────────────────────
@@ -240,7 +288,7 @@ Use the tray icon to reopen the window or quit entirely.`,
 			return nil
 		}
 
-		stopProxy := func() error {
+		stopProxy = func() error {
 			proxySrvMu.Lock()
 			defer proxySrvMu.Unlock()
 
