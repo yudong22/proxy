@@ -198,13 +198,17 @@ func TestLast_ReturnsCopies_NotInternalReferences(t *testing.T) {
 func TestConcurrent_AddAndLast(t *testing.T) {
 	// Run with -race to catch any data races in the ring buffer.
 	h := New(50)
-	var wg sync.WaitGroup
+	// Use separate WaitGroups for writers and readers so we can wait for
+	// writers to finish before signalling readers to stop. Sharing a single
+	// wg (and closing stop only after wg.Wait) would deadlock, because
+	// readers only exit when stop is closed.
+	var writerWG, readerWG sync.WaitGroup
 	const writers = 10
 	const writesEach = 200
 	for w := 0; w < writers; w++ {
-		wg.Add(1)
+		writerWG.Add(1)
 		go func(base int) {
-			defer wg.Done()
+			defer writerWG.Done()
 			for i := 0; i < writesEach; i++ {
 				h.Add(makeRecord(base*writesEach + i))
 			}
@@ -214,9 +218,9 @@ func TestConcurrent_AddAndLast(t *testing.T) {
 	const readers = 4
 	stop := make(chan struct{})
 	for r := 0; r < readers; r++ {
-		wg.Add(1)
+		readerWG.Add(1)
 		go func() {
-			defer wg.Done()
+			defer readerWG.Done()
 			for {
 				select {
 				case <-stop:
@@ -227,24 +231,10 @@ func TestConcurrent_AddAndLast(t *testing.T) {
 			}
 		}()
 	}
-	// Wait for writers, then signal readers to stop.
-	go func() {
-		// Wait by polling writers via wg? Simpler: just sleep enough.
-		// (Writer completion is implied by wg.Wait after we close stop.)
-	}()
-	// Wait for writers to finish.
-	ww := writers
-	for ww > 0 {
-		ww--
-		// sleep a tiny amount to let writer goroutines finish
-		// before closing stop, so readers don't see a torn state.
-	}
-	// We don't have a direct way to know writers are done without
-	// splitting the WaitGroup, so we use a small timeout instead.
-	// The mutex on Add/Last is sufficient to prevent data corruption
-	// — readers will simply see the final state once writers exit.
-	wg.Wait() // join everyone (writers + readers)
+	// Wait for writers to finish, then signal readers to stop and join them.
+	writerWG.Wait()
 	close(stop)
+	readerWG.Wait()
 	// Sanity check: Len should equal capacity.
 	if h.Len() != 50 {
 		t.Errorf("after %d writers × %d writes into cap=50, Len = %d, want 50",
