@@ -26,6 +26,7 @@ const (
 var version = "dev"
 
 func main() {
+	setupDefaultCommand()
 	rootCmd := &cobra.Command{
 		Use:     appName,
 		Aliases: []string{"oc-go-cc"},

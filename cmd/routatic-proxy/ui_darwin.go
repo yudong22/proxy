@@ -325,3 +325,12 @@ func addPlatformCommands(rootCmd *cobra.Command) {
 	uiCmd.Flags().String("config", "", "配置文件路径")
 	rootCmd.AddCommand(uiCmd)
 }
+
+func setupDefaultCommand() {
+	if len(os.Args) == 1 {
+		executable, err := os.Executable()
+		if err == nil && strings.Contains(executable, ".app/Contents/MacOS") {
+			os.Args = append(os.Args, "ui")
+		}
+	}
+}
