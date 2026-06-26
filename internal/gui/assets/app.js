@@ -221,7 +221,7 @@ function renderModelList(counts) {
   const max = entries[0][1];
   list.innerHTML = entries.slice(0, 10).map(([model, count]) => `
     <div class="model-row">
-      <div class="model-name" title="${model}">${model}</div>
+      <div class="model-name" title="${escapeHtml(model)}">${escapeHtml(model)}</div>
       <div class="model-bar-wrap">
         <div class="model-bar" style="width:${Math.round(count/max*100)}%"></div>
       </div>
@@ -258,10 +258,10 @@ function renderHistory() {
   tbody.innerHTML = filtered.map(h => `
     <tr>
       <td>${fmtTime(h.start_time)}</td>
-      <td><span title="${h.provider || ''}">${h.model || '—'}</span></td>
-      <td><span class="badge badge-scene">${h.scenario || '—'}</span></td>
-      <td>${h.input_tokens > 0 ? h.input_tokens.toLocaleString() : '—'}</td>
-      <td>${h.output_tokens > 0 ? h.output_tokens.toLocaleString() : '—'}</td>
+      <td><span title="${escapeHtml(h.provider || '')}">${escapeHtml(h.model) || '—'}</span></td>
+      <td><span class="badge badge-scene">${escapeHtml(h.scenario) || '—'}</span></td>
+      <td>${h.input_tokens != null ? h.input_tokens.toLocaleString() : '—'}</td>
+      <td>${h.output_tokens != null ? h.output_tokens.toLocaleString() : '—'}</td>
       <td>${fmtDuration(h.duration_ms)}</td>
       <td><span class="badge ${h.success ? 'badge-success' : 'badge-error'}">${h.success ? t('badge.success') : t('badge.fail')}</span></td>
     </tr>
@@ -273,7 +273,7 @@ function updateModelFilter() {
   const current = sel.value;
   const models = [...new Set(allHistory.map(h => h.model).filter(Boolean))].sort();
   sel.innerHTML = '<option value="">' + t('filter.allModels') + '</option>' +
-    models.map(m => `<option value="${m}" ${m===current?'selected':''}>${m}</option>`).join('');
+    models.map(m => `<option value="${escapeHtml(m)}" ${m===current?'selected':''}>${escapeHtml(m)}</option>`).join('');
   sel.value = current;
 }
 
@@ -334,6 +334,13 @@ async function toggleNotify(el) {
 
 /* ── Helpers ───────────────────────────────────────────────────── */
 function fmt(n) { return n != null ? Number(n).toLocaleString() : '—'; }
+
+function escapeHtml(str) {
+  if (!str && str !== 0) return '';
+  return String(str).replace(/[&<>"']/g, function(c) {
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'})[c];
+  });
+}
 
 function fmtTime(iso) {
   if (!iso) return '—';
