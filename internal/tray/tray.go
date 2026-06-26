@@ -114,7 +114,7 @@ func SetAutostart(enabled bool) {
 // A real app would embed an .icns; here we use a unicode bullet.
 func setIcon(running bool) {
 	if running {
-		systray.SetTitle("⚡")
+		systray.SetTitle("▶")
 	} else {
 		systray.SetTitle("⚡")
 	}
