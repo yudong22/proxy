@@ -361,9 +361,9 @@ func (h *MessagesHandler) HandleMessages(w http.ResponseWriter, r *http.Request)
 	}
 
 	if isStreaming {
-		h.handleStreaming(w, r, &anthropicReq, normalizedReq, modelChain, rawBody)
+		h.handleStreaming(w, r, &anthropicReq, normalizedReq, modelChain, rawBody, routeResult.Scenario)
 	} else {
-		h.handleNonStreaming(w, r, &anthropicReq, normalizedReq, modelChain, rawBody)
+		h.handleNonStreaming(w, r, &anthropicReq, normalizedReq, modelChain, rawBody, routeResult.Scenario)
 	}
 }
 
@@ -465,6 +465,7 @@ func (h *MessagesHandler) handleStreaming(
 	normalizedReq *core.NormalizedRequest,
 	modelChain []config.ModelConfig,
 	rawBody json.RawMessage,
+	scenario router.Scenario,
 ) {
 	clientCtx := r.Context()
 
@@ -535,6 +536,7 @@ func (h *MessagesHandler) handleStreaming(
 				h.history.Add(history.RequestRecord{
 					Model:        model.ModelID,
 					Provider:     model.Provider,
+					Scenario:     string(scenario),
 					StartTime:    streamStart,
 					Duration:     latency,
 					InputTokens:  rw.usage.inputTokens,
@@ -1005,6 +1007,7 @@ func (h *MessagesHandler) handleNonStreaming(
 	normalizedReq *core.NormalizedRequest,
 	modelChain []config.ModelConfig,
 	rawBody json.RawMessage,
+	scenario router.Scenario,
 ) {
 	ctx := r.Context()
 	startTime := time.Now()
@@ -1096,6 +1099,7 @@ func (h *MessagesHandler) handleNonStreaming(
 		h.history.Add(history.RequestRecord{
 			Model:        result.ModelID,
 			Provider:     provider,
+			Scenario:     string(scenario),
 			StartTime:    startTime,
 			Duration:     latency,
 			InputTokens:  inputTokens,

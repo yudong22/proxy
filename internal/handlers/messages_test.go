@@ -587,7 +587,7 @@ func TestHandleStreaming_GoAnthropicModel_SendsRawAnthropicBody(t *testing.T) {
 	ctx, cancel := context.WithCancel(req.Context())
 	defer cancel()
 
-	handler.handleStreaming(recorder, req.WithContext(ctx), &anthropicReq, &core.NormalizedRequest{}, chain, rawBody)
+	handler.handleStreaming(recorder, req.WithContext(ctx), &anthropicReq, &core.NormalizedRequest{}, chain, rawBody, router.Scenario(""))
 
 	if len(capturedBody) == 0 {
 		t.Fatal("upstream received no body")
@@ -682,7 +682,7 @@ func TestHandleStreaming_GoAnthropicModel_FallsThroughOnError(t *testing.T) {
 	ctx, cancel := context.WithCancel(req.Context())
 	defer cancel()
 
-	handler.handleStreaming(recorder, req.WithContext(ctx), &anthropicReq, &core.NormalizedRequest{}, chain, rawBody)
+	handler.handleStreaming(recorder, req.WithContext(ctx), &anthropicReq, &core.NormalizedRequest{}, chain, rawBody, router.Scenario(""))
 
 	finalCount := atomic.LoadInt32(&callCount)
 	if finalCount != 2 {
@@ -1116,7 +1116,7 @@ func TestHandleStreaming_ConfigurableTimeout(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		handler.handleStreaming(recorder, req.WithContext(ctx), &anthropicReq, &core.NormalizedRequest{Stream: true}, chain, rawBody)
+		handler.handleStreaming(recorder, req.WithContext(ctx), &anthropicReq, &core.NormalizedRequest{Stream: true}, chain, rawBody, router.Scenario(""))
 	}()
 
 	select {
@@ -1168,7 +1168,7 @@ func TestHandleStreaming_ClientContextCanceled_StopsFallback(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		handler.handleStreaming(recorder, req.WithContext(ctx), &anthropicReq, &core.NormalizedRequest{Stream: true}, chain, rawBody)
+		handler.handleStreaming(recorder, req.WithContext(ctx), &anthropicReq, &core.NormalizedRequest{Stream: true}, chain, rawBody, router.Scenario(""))
 	}()
 
 	select {
@@ -1225,7 +1225,7 @@ func TestHandleStreaming_ClientDisconnectsDuringStream_StopsFallback(t *testing.
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		handler.handleStreaming(recorder, req.WithContext(ctx), &anthropicReq, &core.NormalizedRequest{Stream: true}, chain, rawBody)
+		handler.handleStreaming(recorder, req.WithContext(ctx), &anthropicReq, &core.NormalizedRequest{Stream: true}, chain, rawBody, router.Scenario(""))
 	}()
 
 	time.Sleep(100 * time.Millisecond)
@@ -1303,7 +1303,7 @@ func TestHandleStreaming_PerModelTimeoutFallback(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		handler.handleStreaming(recorder, req.WithContext(ctx), &anthropicReq, &core.NormalizedRequest{Stream: true}, chain, rawBody)
+		handler.handleStreaming(recorder, req.WithContext(ctx), &anthropicReq, &core.NormalizedRequest{Stream: true}, chain, rawBody, router.Scenario(""))
 	}()
 
 	select {
@@ -1557,7 +1557,7 @@ func TestHandleStreaming_AnthropicRaw_NoKeepaliveInjection(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		handler.handleStreaming(recorder, req.WithContext(ctx), &anthropicReq, &core.NormalizedRequest{Stream: true}, chain, rawBody)
+		handler.handleStreaming(recorder, req.WithContext(ctx), &anthropicReq, &core.NormalizedRequest{Stream: true}, chain, rawBody, router.Scenario(""))
 	}()
 
 	time.Sleep(1000 * time.Millisecond)
