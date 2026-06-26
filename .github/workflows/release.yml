@@ -2,7 +2,6 @@ name: Release
 
 on:
   push:
-    branches: [main]
     tags:
       - 'v*'
 
@@ -169,6 +168,7 @@ jobs:
           body_path: changelog.md
           draft: false
           prerelease: false
+          make_latest: true
 
   # ── Stage 2.5: Build macOS DMG ──────────────────────────────────
   release-macos:
@@ -197,3 +197,4 @@ jobs:
         with:
           tag_name: ${{ needs.release.outputs.tag }}
           files: bin/RoutaticProxy.dmg
+          make_latest: true
