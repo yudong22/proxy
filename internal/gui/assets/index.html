@@ -76,6 +76,10 @@
       <select class="filter-select" id="model-filter" aria-label="Filter by model">
         <option value="" data-i18n="filter.allModels">All Models</option>
       </select>
+      <div class="history-actions">
+        <button class="btn btn-small" id="btn-copy-history" onclick="copyHistory()" data-i18n="btn.copy">Copy</button>
+        <button class="btn btn-small" id="btn-download-history" onclick="downloadHistory()" data-i18n="btn.download">Download</button>
+      </div>
       <span class="history-count" id="history-count" aria-live="polite"></span>
     </div>
     <div class="table-wrap">
@@ -88,11 +92,12 @@
             <th class="sortable" data-sort="input_tokens" data-i18n="th.inputTokens" aria-sort="none">Input Tokens <span class="sort-icon">↕</span></th>
             <th class="sortable" data-sort="output_tokens" data-i18n="th.outputTokens" aria-sort="none">Output Tokens <span class="sort-icon">↕</span></th>
             <th class="sortable" data-sort="duration_ms" data-i18n="th.duration" aria-sort="none">Duration <span class="sort-icon">↕</span></th>
+            <th data-i18n="th.streamed">Streamed</th>
             <th data-i18n="th.status">Status</th>
           </tr>
         </thead>
         <tbody id="history-tbody">
-          <tr><td colspan="7" class="empty-state" data-i18n="empty.noHistory">No history yet</td></tr>
+          <tr><td colspan="8" class="empty-state" data-i18n="empty.noHistory">No history yet</td></tr>
         </tbody>
       </table>
     </div>

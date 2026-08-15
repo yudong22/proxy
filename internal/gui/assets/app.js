@@ -23,6 +23,7 @@ const TRANSLATIONS = {
     'th.outputTokens': 'Output Tokens',
     'th.duration': 'Duration',
     'th.status': 'Status',
+    'th.streamed': 'Streamed',
     'empty.noHistory': 'No history yet',
     'setting.proxy': 'Proxy Service',
     'setting.proxyDesc': 'Start or stop the proxy HTTP service',
@@ -47,6 +48,13 @@ const TRANSLATIONS = {
     'status.filtered': ' (filtered)',
     'badge.success': 'Success',
     'badge.fail': 'Fail',
+    'badge.stream': 'Streamed',
+    'badge.nonstream': 'One-shot',
+    'btn.copy': 'Copy',
+    'btn.download': 'Download',
+    'status.copied': 'Copied!',
+    'status.copyFail': 'Copy failed',
+    'status.noHistoryToExport': 'No history to export',
     'port.info': 'Listening port: —',
     'save.unloaded': 'Config not loaded, cannot save',
   },
@@ -73,6 +81,7 @@ const TRANSLATIONS = {
     'th.outputTokens': '输出 Token',
     'th.duration': '耗时',
     'th.status': '状态',
+    'th.streamed': '流式',
     'empty.noHistory': '暂无历史请求',
     'setting.proxy': '代理服务',
     'setting.proxyDesc': '启动或停止代理 HTTP 服务',
@@ -97,6 +106,13 @@ const TRANSLATIONS = {
     'status.filtered': '（已筛选）',
     'badge.success': '成功',
     'badge.fail': '失败',
+    'badge.stream': '流式',
+    'badge.nonstream': '一次性',
+    'btn.copy': '复制',
+    'btn.download': '下载',
+    'status.copied': '已复制！',
+    'status.copyFail': '复制失败',
+    'status.noHistoryToExport': '没有可导出的历史',
     'port.info': '监听端口：—',
     'save.unloaded': '未加载当前配置，无法保存',
   }
@@ -145,6 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
 /* global state */
 let allHistory = [];
 let currentFilter = '';
+let currentVisibleHistory = []; // filtered+searched+sorted rows shown in the table
 let lastModelCounts = {};
 
 /* ── Tab switching ─────────────────────────────────────────────── */
@@ -261,11 +278,14 @@ function renderHistory() {
   // Apply sort
   filtered = sortHistory(filtered);
 
+  // Expose the visible rows so Copy/Download operate on exactly what's shown.
+  currentVisibleHistory = filtered;
+
   document.getElementById('history-count').textContent =
     filtered.length + t('status.count') + (currentFilter ? t('status.filtered') : '');
 
   if (filtered.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">' + t('empty.noHistory') + '</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">' + t('empty.noHistory') + '</td></tr>';
     return;
   }
 
@@ -274,9 +294,10 @@ function renderHistory() {
       <td>${fmtTime(h.start_time)}</td>
       <td><span title="${escapeHtml(h.provider || '')}">${escapeHtml(h.model) || '—'}</span></td>
       <td><span class="badge badge-scene">${escapeHtml(h.scenario) || '—'}</span></td>
-      <td>${h.input_tokens != null ? h.input_tokens.toLocaleString() : '—'}</td>
+      <td>${fmtInputTokens(h)}</td>
       <td>${h.output_tokens != null ? h.output_tokens.toLocaleString() : '—'}</td>
       <td>${fmtDuration(h.duration_ms)}</td>
+      <td><span class="badge ${h.streaming ? 'badge-stream' : 'badge-nonstream'}">${h.streaming ? t('badge.stream') : t('badge.nonstream')}</span></td>
       <td><span class="badge ${h.success ? 'badge-success' : 'badge-error'}">${h.success ? t('badge.success') : t('badge.fail')}</span></td>
     </tr>
   `).join('');
@@ -377,6 +398,107 @@ function fmtDuration(ms) {
   if (!ms && ms !== 0) return '—';
   if (ms < 1000) return ms + ' ms';
   return (ms / 1000).toFixed(1) + ' s';
+}
+
+// Total input tokens consumed by a request, including the portions served from
+// / written to the upstream prompt cache. Per the Anthropic spec, `input_tokens`
+// excludes cache tokens, so a heavily-cached request can report a small (even
+// zero) InputTokens while actually consuming many. Summing all three gives the
+// full prompt size a user would expect to see.
+function fmtInputTokens(h) {
+  return totalInputTokens(h).toLocaleString();
+}
+
+/* ── History Export (Copy / Download) ──────────────────────────── */
+
+// Build compact human-readable log lines for the given records (one per request).
+// This is the troubleshooting format used by both Copy and Download.
+function formatHistoryLines(records) {
+  return records.map(h => {
+    const ts = h.start_time ? new Date(h.start_time) : null;
+    const timeStr = ts && !isNaN(ts) ? ts.toISOString().slice(0, 19).replace('T', ' ') : '—';
+    const streamed = h.streaming ? 'streamed' : 'one-shot';
+    const status = h.success ? 'success' : 'fail';
+    const input = totalInputTokens(h);
+    const parts = [
+      timeStr,
+      h.model || '—',
+      h.scenario || '—',
+      'in=' + input,
+      'out=' + (h.output_tokens != null ? h.output_tokens : 0),
+      'cache=' + (h.cache_read_input_tokens || 0) + '+' + (h.cache_creation_input_tokens || 0),
+      streamed,
+      status,
+      h.duration_ms != null ? h.duration_ms + 'ms' : '—'
+    ];
+    if (h.success === false && h.error_msg) parts.push('error=' + h.error_msg);
+    return parts.join('  ');
+  });
+}
+
+function exportHistoryText() {
+  if (!currentVisibleHistory || currentVisibleHistory.length === 0) {
+    flashHistoryAction(t('status.noHistoryToExport'));
+    return null;
+  }
+  return formatHistoryLines(currentVisibleHistory).join('\n');
+}
+
+async function copyHistory() {
+  const text = exportHistoryText();
+  if (text === null) return;
+
+  let ok = false;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      ok = true;
+    } catch (e) { /* fall through to execCommand */ }
+  }
+  if (!ok) {
+    // Fallback for webviews without the async Clipboard API.
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      ok = document.execCommand('copy');
+    } catch (e) { /* ignore */ } finally {
+      document.body.removeChild(ta);
+    }
+  }
+  flashHistoryAction(ok ? t('status.copied') : t('status.copyFail'));
+}
+
+function downloadHistory() {
+  const text = exportHistoryText();
+  if (text === null) return;
+
+  const blob = new Blob([text + '\n'], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'routatic-proxy-history.log';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// Briefly flash a status message in place of the history count.
+function flashHistoryAction(msg) {
+  const el = document.getElementById('history-count');
+  if (!el) return;
+  const original = el.textContent;
+  el.textContent = msg;
+  clearTimeout(flashHistoryAction._t);
+  flashHistoryAction._t = setTimeout(() => {
+    if (document.getElementById('history-count')) {
+      document.getElementById('history-count').textContent = original;
+    }
+  }, 1500);
 }
 
 /* ── Proxy Config Form ─────────────────────────────────────────── */
@@ -587,8 +709,15 @@ document.querySelectorAll('.sortable').forEach(th => {
 
 function sortHistory(history) {
   return [...history].sort((a, b) => {
-    let aVal = a[currentSort.field];
-    let bVal = b[currentSort.field];
+    let aVal, bVal;
+    if (currentSort.field === 'input_tokens') {
+      // Sort by total input tokens (including cache) to match the displayed value.
+      aVal = totalInputTokens(a);
+      bVal = totalInputTokens(b);
+    } else {
+      aVal = a[currentSort.field];
+      bVal = b[currentSort.field];
+    }
     if (aVal == null) aVal = '';
     if (bVal == null) bVal = '';
     if (typeof aVal === 'string') aVal = aVal.toLowerCase();
@@ -597,6 +726,14 @@ function sortHistory(history) {
     if (aVal > bVal) return currentSort.dir === 'asc' ? 1 : -1;
     return 0;
   });
+}
+
+// Numeric total input tokens for a record (used for sorting).
+function totalInputTokens(h) {
+  const base = (h && h.input_tokens != null) ? h.input_tokens : 0;
+  const cacheRead = (h && h.cache_read_input_tokens != null) ? h.cache_read_input_tokens : 0;
+  const cacheCreation = (h && h.cache_creation_input_tokens != null) ? h.cache_creation_input_tokens : 0;
+  return base + cacheRead + cacheCreation;
 }
 
 /* ── History Detail Modal ──────────────────────────────────────── */
@@ -624,7 +761,7 @@ function showHistoryDetail(record) {
     </div>
     <div class="detail-row">
       <span class="detail-label">Input Tokens</span>
-      <span class="detail-value">${record.input_tokens != null ? record.input_tokens.toLocaleString() : '—'}</span>
+      <span class="detail-value">${fmtInputTokens(record)}</span>
     </div>
     <div class="detail-row">
       <span class="detail-label">Output Tokens</span>
@@ -637,6 +774,10 @@ function showHistoryDetail(record) {
     <div class="detail-row">
       <span class="detail-label">Status</span>
       <span class="detail-value" style="color: var(--${record.success ? 'success' : 'error'})">${record.success ? 'Success' : 'Failed'}</span>
+    </div>
+    <div class="detail-row">
+      <span class="detail-label">Streamed</span>
+      <span class="detail-value">${record.streaming ? 'Streamed' : 'One-shot'}</span>
     </div>
   `;
   modal.classList.add('visible');

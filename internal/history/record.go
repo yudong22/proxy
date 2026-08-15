@@ -13,7 +13,14 @@ type RequestRecord struct {
 	Duration     time.Duration // total latency
 	InputTokens  int           // input tokens from SSE usage event
 	OutputTokens int           // output tokens from SSE usage event
-	Streaming    bool          // whether this was a streaming request
-	Success      bool          // whether it completed successfully
-	ErrorMsg     string        // error message if failed
+	// CacheReadInputTokens and CacheCreationInputTokens break out the portions
+	// of the prompt served from / written to the upstream prompt cache. Per the
+	// Anthropic spec, InputTokens excludes these, so a heavily-cached request
+	// can report a small (even zero) InputTokens while consuming many total
+	// tokens. The GUI sums all three to show the total prompt size.
+	CacheReadInputTokens     int    // tokens read from the prompt cache
+	CacheCreationInputTokens int    // tokens written to the prompt cache
+	Streaming                bool   // whether this was a streaming request
+	Success                  bool   // whether it completed successfully
+	ErrorMsg                 string // error message if failed
 }

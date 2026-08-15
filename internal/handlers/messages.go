@@ -534,15 +534,17 @@ func (h *MessagesHandler) handleStreaming(
 			)
 			if h.history != nil {
 				h.history.Add(history.RequestRecord{
-					Model:        model.ModelID,
-					Provider:     model.Provider,
-					Scenario:     string(scenario),
-					StartTime:    streamStart,
-					Duration:     latency,
-					InputTokens:  rw.usage.inputTokens,
-					OutputTokens: rw.usage.outputTokens,
-					Streaming:    true,
-					Success:      true,
+					Model:                    model.ModelID,
+					Provider:                 model.Provider,
+					Scenario:                 string(scenario),
+					StartTime:                streamStart,
+					Duration:                 latency,
+					InputTokens:              rw.usage.inputTokens,
+					OutputTokens:             rw.usage.outputTokens,
+					CacheReadInputTokens:     rw.usage.cacheReadInputTokens,
+					CacheCreationInputTokens: rw.usage.cacheCreationInputTokens,
+					Streaming:                true,
+					Success:                  true,
 				})
 			}
 		}
@@ -1088,24 +1090,28 @@ func (h *MessagesHandler) handleNonStreaming(
 		}
 	}
 
-	var inputTokens, outputTokens int
+	var inputTokens, outputTokens, cacheReadInput, cacheCreationInput int
 	var msgResp types.MessageResponse
 	if errUnmarshal := json.Unmarshal(responseBody, &msgResp); errUnmarshal == nil {
 		inputTokens = msgResp.Usage.InputTokens
 		outputTokens = msgResp.Usage.OutputTokens
+		cacheReadInput = msgResp.Usage.CacheReadInputTokens
+		cacheCreationInput = msgResp.Usage.CacheCreationInputTokens
 	}
 
 	if h.history != nil {
 		h.history.Add(history.RequestRecord{
-			Model:        result.ModelID,
-			Provider:     provider,
-			Scenario:     string(scenario),
-			StartTime:    startTime,
-			Duration:     latency,
-			InputTokens:  inputTokens,
-			OutputTokens: outputTokens,
-			Streaming:    false,
-			Success:      true,
+			Model:                    result.ModelID,
+			Provider:                 provider,
+			Scenario:                 string(scenario),
+			StartTime:                startTime,
+			Duration:                 latency,
+			InputTokens:              inputTokens,
+			OutputTokens:             outputTokens,
+			CacheReadInputTokens:     cacheReadInput,
+			CacheCreationInputTokens: cacheCreationInput,
+			Streaming:                false,
+			Success:                  true,
 		})
 	}
 

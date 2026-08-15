@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/routatic/proxy/internal/client"
 	"github.com/routatic/proxy/internal/config"
 	"github.com/routatic/proxy/internal/core"
+	"github.com/routatic/proxy/internal/daemon"
 	"github.com/routatic/proxy/internal/debug"
 	"github.com/routatic/proxy/internal/handlers"
 	"github.com/routatic/proxy/internal/history"
@@ -72,6 +74,15 @@ func NewServer(atomic *config.AtomicConfig, captureLogger *debug.CaptureLogger) 
 
 	// Create history ring buffer (1000 entries, in-memory).
 	hist := history.New(1000)
+
+	// Persist history to a JSONL file so it survives restarts.
+	if paths, err := daemon.DefaultPaths(); err == nil {
+		historyPath := filepath.Join(paths.ConfigDir, "history.jsonl")
+		hist.SetPersistPath(historyPath)
+		if err := hist.LoadFromFile(historyPath); err != nil {
+			logger.Warn("failed to load history from file", "path", historyPath, "err", err)
+		}
+	}
 
 	// Create handlers.
 	messagesHandler := handlers.NewMessagesHandler(
