@@ -503,7 +503,11 @@ func (h *MessagesHandler) handleStreaming(
 
 	streamStart := time.Now()
 
+	// Tracks the last attempted model so a final failure can be attributed
+	// even after the loop (the loop variable is scoped to the loop body).
+	var lastModel config.ModelConfig
 	for _, model := range modelChain {
+		lastModel = model
 		select {
 		case <-clientCtx.Done():
 			h.logger.Debug("client disconnected, stopping streaming fallbacks")
@@ -536,7 +540,7 @@ func (h *MessagesHandler) handleStreaming(
 				h.history.Add(history.RequestRecord{
 					Model:                    model.ModelID,
 					Provider:                 model.Provider,
-					Scenario:                 string(scenario),
+					Scenario:                 string(recordScenario(scenario, modelChain, model.ModelID)),
 					StartTime:                streamStart,
 					Duration:                 latency,
 					InputTokens:              rw.usage.inputTokens,
@@ -565,6 +569,7 @@ func (h *MessagesHandler) handleStreaming(
 				if rw.ssePayloadWritten {
 					h.sendStreamError(rw, "stream idle after SSE payload started")
 					h.metrics.RecordFailure()
+					h.recordHistoryFailure(model, recordScenario(scenario, modelChain, model.ModelID), streamStart, true, err)
 					return false // abort
 				}
 				return true // continue to next model
@@ -573,6 +578,7 @@ func (h *MessagesHandler) handleStreaming(
 			if rw.ssePayloadWritten {
 				h.sendStreamError(rw, "all upstream models failed after SSE payload started")
 				h.metrics.RecordFailure()
+				h.recordHistoryFailure(model, recordScenario(scenario, modelChain, model.ModelID), streamStart, true, err)
 				return false // abort — cannot fallback after SSE payload started
 			}
 			return true // continue to next model
@@ -747,6 +753,7 @@ func (h *MessagesHandler) handleStreaming(
 	}
 
 	h.metrics.RecordFailure()
+	h.recordHistoryFailure(lastModel, recordScenario(scenario, modelChain, lastModel.ModelID), streamStart, true, errors.New("all streaming models failed"))
 	if rw.ssePayloadWritten {
 		// SSE payload was already sent — do not attempt further writes
 		// beyond the error event.  The client has a partial stream.
@@ -757,6 +764,39 @@ func (h *MessagesHandler) handleStreaming(
 	} else {
 		h.sendStreamError(rw, "all upstream models failed")
 	}
+}
+
+// recordScenario returns the scenario to attribute to a history record for the
+// model actually used. When the used model differs from the chain's primary
+// (a fallback substitution happened), the record is tagged "override" so the
+// History page shows that the requested model was replaced by another one.
+func recordScenario(scenario router.Scenario, modelChain []config.ModelConfig, modelID string) router.Scenario {
+	if len(modelChain) > 0 && modelID != modelChain[0].ModelID {
+		return router.ScenarioOverride
+	}
+	return scenario
+}
+
+// recordHistoryFailure writes a failed request into history so the History
+// page and Overview counts cover every completed request, not just successes.
+func (h *MessagesHandler) recordHistoryFailure(model config.ModelConfig, scenario router.Scenario, start time.Time, streaming bool, err error) {
+	if h.history == nil {
+		return
+	}
+	msg := ""
+	if err != nil {
+		msg = err.Error()
+	}
+	h.history.Add(history.RequestRecord{
+		Model:     model.ModelID,
+		Provider:  model.Provider,
+		Scenario:  string(scenario),
+		StartTime: start,
+		Duration:  time.Since(start),
+		Streaming: streaming,
+		Success:   false,
+		ErrorMsg:  msg,
+	})
 }
 
 // handleResponsesStreaming handles streaming for OpenAI Responses endpoint.
@@ -1069,6 +1109,13 @@ func (h *MessagesHandler) handleNonStreaming(
 			return
 		}
 		h.metrics.RecordFailure()
+		// Attribute a failed request to the primary (first) model in the chain —
+		// that is the model the request was routed to.
+		var failedModel config.ModelConfig
+		if len(modelChain) > 0 {
+			failedModel = modelChain[0]
+		}
+		h.recordHistoryFailure(failedModel, recordScenario(scenario, modelChain, failedModel.ModelID), startTime, false, err)
 		h.sendError(w, http.StatusBadGateway, "all models failed", err)
 		return
 	}
@@ -1103,7 +1150,7 @@ func (h *MessagesHandler) handleNonStreaming(
 		h.history.Add(history.RequestRecord{
 			Model:                    result.ModelID,
 			Provider:                 provider,
-			Scenario:                 string(scenario),
+			Scenario:                 string(recordScenario(scenario, modelChain, result.ModelID)),
 			StartTime:                startTime,
 			Duration:                 latency,
 			InputTokens:              inputTokens,

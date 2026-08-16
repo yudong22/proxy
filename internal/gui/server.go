@@ -14,8 +14,10 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/routatic/proxy/internal/config"
 	"github.com/routatic/proxy/internal/daemon"
@@ -126,6 +128,7 @@ func (s *Server) Start(ctx context.Context) (string, error) {
 	// API endpoints.
 	mux.HandleFunc("/api/metrics", s.handleMetrics)
 	mux.HandleFunc("/api/history", s.handleHistory)
+	mux.HandleFunc("/api/stats/daily", s.handleDailyStats)
 	mux.HandleFunc("/api/config", s.handleConfig)
 	mux.HandleFunc("/api/proxy/config", s.handleProxyConfig)
 	mux.HandleFunc("/api/proxy/start", s.handleProxyStart)
@@ -161,30 +164,50 @@ type metricsResponse struct {
 	ConnectedExisting bool             `json:"connected_to_existing"`
 	Port              int              `json:"port"`
 	RequestsReceived  int64            `json:"requests_received"`
-	RequestsStreamed  int64            `json:"requests_streamed"`
 	RequestsSuccess   int64            `json:"requests_success"`
 	RequestsFailed    int64            `json:"requests_failed"`
+	TokensToday       int64            `json:"tokens_today"`
 	ModelCounts       map[string]int64 `json:"model_counts"`
 }
 
+// handleMetrics reports today's request counts, derived from history records so
+// the Overview cards always match the History page filtered to "Today". Falls
+// back to the in-process counters when history is unavailable (GUI-only run).
 func (s *Server) handleMetrics(w http.ResponseWriter, _ *http.Request) {
-	var snap metrics.Snapshot
-	if s.met != nil {
-		snap = s.met.GetSnapshot()
-	}
-	modelCounts := snap.ModelCounts
-	if modelCounts == nil {
-		modelCounts = make(map[string]int64)
-	}
 	resp := metricsResponse{
 		ProxyRunning:      s.proxyRunning.Load(),
 		ConnectedExisting: s.connectedExisting.Load(),
 		Port:              s.getProxyPort(),
-		RequestsReceived:  snap.RequestsReceived,
-		RequestsStreamed:  snap.RequestsStreamed,
-		RequestsSuccess:   snap.RequestsSuccess,
-		RequestsFailed:    snap.RequestsFailed,
-		ModelCounts:       modelCounts,
+		ModelCounts:       make(map[string]int64),
+	}
+
+	if s.hist != nil {
+		now := time.Now()
+		startOfToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		for _, rec := range s.hist.Since(startOfToday) {
+			resp.RequestsReceived++
+			if rec.Success {
+				resp.RequestsSuccess++
+			} else {
+				resp.RequestsFailed++
+			}
+			resp.TokensToday += int64(rec.InputTokens + rec.OutputTokens +
+				rec.CacheReadInputTokens + rec.CacheCreationInputTokens)
+			resp.ModelCounts[rec.Model]++
+		}
+		writeJSON(w, resp)
+		return
+	}
+
+	var snap metrics.Snapshot
+	if s.met != nil {
+		snap = s.met.GetSnapshot()
+	}
+	resp.RequestsReceived = snap.RequestsReceived
+	resp.RequestsSuccess = snap.RequestsSuccess
+	resp.RequestsFailed = snap.RequestsFailed
+	if snap.ModelCounts != nil {
+		resp.ModelCounts = snap.ModelCounts
 	}
 	writeJSON(w, resp)
 }
@@ -210,7 +233,7 @@ func (s *Server) handleHistory(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, []historyEntry{})
 		return
 	}
-	records := s.hist.Last(200)
+	records := s.hist.Last(0) // all records in the ring buffer (≤1000, bounded)
 	out := make([]historyEntry, len(records))
 	for i, rec := range records {
 		out[i] = historyEntry{
@@ -230,6 +253,26 @@ func (s *Server) handleHistory(w http.ResponseWriter, _ *http.Request) {
 		}
 	}
 	writeJSON(w, out)
+}
+
+type dailyStatsResponse struct {
+	Days []history.DayStat `json:"days"`
+}
+
+// handleDailyStats returns per-day aggregates for the last N days (default 14)
+// from the history package's cached per-day map, so chart reads are fast.
+func (s *Server) handleDailyStats(w http.ResponseWriter, r *http.Request) {
+	days := 14
+	if v := r.URL.Query().Get("days"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 90 {
+			days = n
+		}
+	}
+	if s.hist == nil {
+		writeJSON(w, dailyStatsResponse{Days: []history.DayStat{}})
+		return
+	}
+	writeJSON(w, dailyStatsResponse{Days: s.hist.Daily(days)})
 }
 
 func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {

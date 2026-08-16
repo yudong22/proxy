@@ -73,9 +73,6 @@ func TestHandleMetrics_DefaultsToZeroCounters(t *testing.T) {
 	if resp.RequestsReceived != 0 {
 		t.Errorf("RequestsReceived = %d, want 0", resp.RequestsReceived)
 	}
-	if resp.RequestsStreamed != 0 {
-		t.Errorf("RequestsStreamed = %d, want 0", resp.RequestsStreamed)
-	}
 	if resp.RequestsSuccess != 0 {
 		t.Errorf("RequestsSuccess = %d, want 0", resp.RequestsSuccess)
 	}

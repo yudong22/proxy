@@ -41,20 +41,33 @@
   <div class="tab-content active" id="tab-overview">
     <div class="metrics-grid">
       <div class="metric-card">
-        <div class="metric-label" data-i18n="metric.total">Total Requests</div>
+        <div class="metric-label" data-i18n="metric.total">Today Requests</div>
         <div class="metric-value" id="m-total">--</div>
       </div>
       <div class="metric-card success">
-        <div class="metric-label" data-i18n="metric.success">Success</div>
+        <div class="metric-label" data-i18n="metric.success">Today Success</div>
         <div class="metric-value" id="m-success">--</div>
       </div>
       <div class="metric-card error">
-        <div class="metric-label" data-i18n="metric.failed">Failed</div>
+        <div class="metric-label" data-i18n="metric.failed">Today Failed</div>
         <div class="metric-value" id="m-failed">--</div>
       </div>
       <div class="metric-card">
-        <div class="metric-label" data-i18n="metric.streamed">Streamed</div>
-        <div class="metric-value" id="m-streamed">--</div>
+        <div class="metric-label" data-i18n="metric.tokens">Today Tokens</div>
+        <div class="metric-value" id="m-tokens">--</div>
+      </div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stats-card">
+        <div class="stats-label" data-i18n="chart.requests">API 请求次数</div>
+        <div class="stats-value" id="stats-requests">--</div>
+        <div class="stats-chart" id="chart-requests"></div>
+      </div>
+      <div class="stats-card">
+        <div class="stats-label" data-i18n="chart.tokens">Tokens</div>
+        <div class="stats-value" id="stats-tokens">--</div>
+        <div class="stats-chart" id="chart-tokens"></div>
       </div>
     </div>
 
@@ -73,6 +86,12 @@
         <input type="text" id="history-search" placeholder="Search requests..." aria-label="Search history">
         <span class="search-shortcut">⌘F</span>
       </div>
+      <select class="filter-select" id="date-filter" aria-label="Filter by date">
+        <option value="today" data-i18n="filter.today">Today</option>
+        <option value="yesterday" data-i18n="filter.yesterday">Yesterday</option>
+        <option value="last7" data-i18n="filter.last7">Last 7 days</option>
+        <option value="all" data-i18n="filter.allTime">All Time</option>
+      </select>
       <select class="filter-select" id="model-filter" aria-label="Filter by model">
         <option value="" data-i18n="filter.allModels">All Models</option>
       </select>

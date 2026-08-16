@@ -2,6 +2,7 @@ package history
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -100,20 +101,47 @@ func appendRecord(path string, r RequestRecord) error {
 	return f.Sync()
 }
 
+// rewriteRecords atomically replaces the JSONL file with the given records
+// (oldest-first), writing to a temp file and renaming over the original. Used
+// by History.compact to bound the on-disk file to the aggregation window.
+func rewriteRecords(path string, records []RequestRecord) error {
+	var buf bytes.Buffer
+	for _, r := range records {
+		line, err := json.Marshal(toPersistedRecord(r))
+		if err != nil {
+			return fmt.Errorf("history compact marshal: %w", err)
+		}
+		buf.Write(line)
+		buf.WriteByte('\n')
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, buf.Bytes(), 0o644); err != nil {
+		return fmt.Errorf("history compact write: %w", err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		return fmt.Errorf("history compact rename: %w", err)
+	}
+	return nil
+}
+
 // loadRecords reads a JSONL history file and returns the records oldest-first,
 // so they can be replayed back into the ring buffer in chronological order.
-// A missing file yields an empty slice (not an error).
-func loadRecords(path string) ([]RequestRecord, error) {
+// A missing file yields an empty slice (not an error). rawLines reports how
+// many successfully-parsed lines were on disk (duplicates included), so the
+// caller can tell when the file holds more than the returned records and needs
+// compaction. Duplicate lines are dropped: older builds re-appended the whole
+// file on every load, so identical records can appear in large runs.
+func loadRecords(path string) (records []RequestRecord, rawLines int, err error) {
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil
+			return nil, 0, nil
 		}
-		return nil, fmt.Errorf("history open: %w", err)
+		return nil, 0, fmt.Errorf("history open: %w", err)
 	}
 	defer f.Close()
 
-	var out []RequestRecord
+	seen := make(map[string]bool)
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for sc.Scan() {
@@ -126,10 +154,29 @@ func loadRecords(path string) ([]RequestRecord, error) {
 			// Skip malformed lines rather than failing the whole file.
 			continue
 		}
-		out = append(out, p.toRequestRecord())
+		rawLines++
+		rec := p.toRequestRecord()
+		key := recordKey(rec)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		records = append(records, rec)
 	}
 	if err := sc.Err(); err != nil {
-		return nil, fmt.Errorf("history scan: %w", err)
+		return nil, 0, fmt.Errorf("history scan: %w", err)
 	}
-	return out, nil
+	return records, rawLines, nil
+}
+
+// recordKey returns a canonical identity for a record, used to drop duplicate
+// lines when replaying the persisted file. The on-disk id is empty for older
+// records, so the key spans all meaningful fields instead.
+func recordKey(r RequestRecord) string {
+	return fmt.Sprintf("%s|%s|%s|%s|%s|%d|%d|%d|%d|%d|%v|%v|%s",
+		r.ID, r.Model, r.Provider, r.Scenario,
+		r.StartTime.UTC().Format(time.RFC3339Nano),
+		r.Duration.Nanoseconds(),
+		r.InputTokens, r.OutputTokens, r.CacheReadInputTokens, r.CacheCreationInputTokens,
+		r.Streaming, r.Success, r.ErrorMsg)
 }

@@ -9,13 +9,24 @@ const TRANSLATIONS = {
     'tab.overview': 'Overview',
     'tab.history': 'History',
     'tab.settings': 'Settings',
-    'metric.total': 'Total Requests',
-    'metric.success': 'Success',
-    'metric.failed': 'Failed',
-    'metric.streamed': 'Streamed',
+    'metric.total': 'Today Requests',
+    'metric.success': 'Today Success',
+    'metric.failed': 'Today Failed',
+    'metric.tokens': 'Today Tokens',
     'section.modelDist': 'Model Distribution',
     'empty.noData': 'No data yet',
     'filter.allModels': 'All Models',
+    'filter.today': 'Today',
+    'filter.yesterday': 'Yesterday',
+    'filter.last7': 'Last 7 days',
+    'filter.allTime': 'All Time',
+    'chart.requests': 'API Requests',
+    'chart.tokens': 'Tokens',
+    'chart.reqOk': '成功',
+    'chart.reqFail': '失败',
+    'chart.tokIn': '输入',
+    'chart.tokOut': '输出',
+    'chart.empty': '暂无数据',
     'th.time': 'Time',
     'th.model': 'Model',
     'th.scenario': 'Scenario',
@@ -24,7 +35,7 @@ const TRANSLATIONS = {
     'th.duration': 'Duration',
     'th.status': 'Status',
     'th.streamed': 'Streamed',
-    'empty.noHistory': 'No history yet',
+        'empty.noHistory': 'No history yet',
     'setting.proxy': 'Proxy Service',
     'setting.proxyDesc': 'Start or stop the proxy HTTP service',
     'setting.autostart': 'Start on Boot',
@@ -67,13 +78,19 @@ const TRANSLATIONS = {
     'tab.overview': '概览',
     'tab.history': '历史请求',
     'tab.settings': '设置',
-    'metric.total': '总请求数',
-    'metric.success': '成功',
-    'metric.failed': '失败',
-    'metric.streamed': '流式请求',
+    'metric.total': '今日请求数',
+    'metric.success': '今日成功',
+    'metric.failed': '今日失败',
+    'metric.tokens': '今日 Tokens',
     'section.modelDist': '模型调用分布',
     'empty.noData': '暂无数据',
     'filter.allModels': '全部模型',
+    'filter.today': '今天',
+    'filter.yesterday': '昨天',
+    'filter.last7': '最近 7 天',
+    'filter.allTime': '全部',
+    'chart.requests': 'API 请求次数',
+    'chart.tokens': 'Tokens',
     'th.time': '时间',
     'th.model': '模型',
     'th.scenario': '场景',
@@ -82,7 +99,7 @@ const TRANSLATIONS = {
     'th.duration': '耗时',
     'th.status': '状态',
     'th.streamed': '流式',
-    'empty.noHistory': '暂无历史请求',
+        'empty.noHistory': '暂无历史请求',
     'setting.proxy': '代理服务',
     'setting.proxyDesc': '启动或停止代理 HTTP 服务',
     'setting.autostart': '开机自启',
@@ -150,6 +167,7 @@ function toggleLanguage() {
   // Re-render dynamic content
   renderModelList(lastModelCounts);
   renderHistory();
+  refreshDailyStats();
 }
 
 // Apply translations on load
@@ -161,6 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
 /* global state */
 let allHistory = [];
 let currentFilter = '';
+let currentDateFilter = 'today'; // today | yesterday | last7 | all
 let currentVisibleHistory = []; // filtered+searched+sorted rows shown in the table
 let lastModelCounts = {};
 
@@ -181,7 +200,7 @@ function startPolling() {
 }
 
 async function refreshAll() {
-  await Promise.all([refreshMetrics(), refreshHistory(), refreshConfig()]);
+  await Promise.all([refreshMetrics(), refreshHistory(), refreshDailyStats(), refreshConfig()]);
 }
 
 /* ── /api/metrics ──────────────────────────────────────────────── */
@@ -205,11 +224,11 @@ async function refreshMetrics() {
       text.textContent = t('status.stopped');
     }
 
-    // metric cards
-    document.getElementById('m-total').textContent   = fmt(d.requests_received);
-    document.getElementById('m-success').textContent = fmt(d.requests_success);
-    document.getElementById('m-failed').textContent  = fmt(d.requests_failed);
-    document.getElementById('m-streamed').textContent = fmt(d.requests_streamed);
+    // metric cards (today's counts, matches the History page "Today" filter)
+    document.getElementById('m-total').textContent    = fmt(d.requests_received);
+    document.getElementById('m-success').textContent  = fmt(d.requests_success);
+    document.getElementById('m-failed').textContent   = fmt(d.requests_failed);
+    document.getElementById('m-tokens').textContent   = fmt(d.tokens_today);
 
     // port info
     const portEl = document.getElementById('port-info');
@@ -247,6 +266,78 @@ function renderModelList(counts) {
   `).join('');
 }
 
+/* ── /api/stats/daily ─────────────────────────────────────────── */
+async function refreshDailyStats() {
+  try {
+    const r = await fetch('/api/stats/daily?days=14');
+    if (!r.ok) return;
+    const d = await r.json();
+    const days = d.days || [];
+    let totalRequests = 0, totalTokens = 0;
+    days.forEach(day => {
+      totalRequests += day.requests || 0;
+      totalTokens += (day.input_tokens || 0) + (day.output_tokens || 0) +
+                     (day.cache_read_tokens || 0) + (day.cache_creation_tokens || 0);
+    });
+    const reqEl = document.getElementById('stats-requests');
+    const tokEl = document.getElementById('stats-tokens');
+    if (reqEl) reqEl.textContent = fmt(totalRequests);
+    if (tokEl) tokEl.textContent = fmt(totalTokens);
+
+    // Requests — vertical stacked bar chart (success / failed)
+    renderVBarChart('chart-requests', days, [
+      { cls: 'bar-ok',   label: t('chart.reqOk'),   color: 'var(--success)', val: d => d.success || 0 },
+      { cls: 'bar-fail', label: t('chart.reqFail'), color: 'var(--error)',   val: d => d.failed  || 0 }
+    ]);
+    // Tokens — vertical stacked bar chart (input / output)
+    renderVBarChart('chart-tokens', days, [
+      { cls: 'bar-in',  label: t('chart.tokIn'),  color: 'var(--chart-input)',  val: d => d.input_tokens  || 0 },
+      { cls: 'bar-out', label: t('chart.tokOut'), color: 'var(--chart-output)', val: d => d.output_tokens || 0 }
+    ]);
+  } catch(e) {}
+}
+
+// ── Chart helpers ──────────────────────────────────────────────────
+// Hand-rolled SVG — no external libraries (webview CSP blocks CDNs).
+// Bars are plain <rect> elements colored via CSS classes and design-token
+// variables.  Hover shows a <title> tooltip with a per-day breakdown.
+
+// Vertical stacked bar chart (one column per day, bars grow bottom-up).
+function renderVBarChart(containerId, days, series) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const total = d => series.reduce((a, s) => a + (s.val(d) || 0), 0);
+  const hasData = days.some(total);
+  if (!hasData) { el.innerHTML = '<div class="chart-empty">' + t('chart.empty') + '</div>'; return; }
+  const n = days.length;
+  const slotW = 22, barW = 14, plotH = 80, topPad = 4, baseY = topPad + plotH, labelY = baseY + 14;
+  const W = n * slotW + 16, H = labelY + 4;
+  let max = 1;
+  days.forEach(d => { const v = total(d); if (v > max) max = v; });
+  let rects = '', labels = '';
+  days.forEach((d, i) => {
+    const x = 8 + i * slotW;
+    let y = baseY;
+    const tipParts = series.map(s => s.label + ': ' + fmt(s.val(d)));
+    const tip = (d.date || '').slice(5) + ' · ' + tipParts.join(' · ');
+    series.forEach(s => {
+      const v = s.val(d) || 0;
+      if (v <= 0) return;
+      const h = Math.max(1, v / max * plotH);
+      rects += `<rect class="${s.cls}" x="${x}" y="${y - h}" width="${barW}" height="${h}"><title>${tip}</title></rect>`;
+      y -= h;
+    });
+    // Only label every 7th day (plus the last/today) so the x-axis dates
+    // don't crowd and overlap.
+    const isLast = i === n - 1;
+    if (i % 7 === 0 || isLast) {
+      const short = (d.date || '').slice(5);
+      labels += `<text class="chart-label${isLast ? ' today' : ''}" x="${x + barW / 2}" y="${labelY}" text-anchor="middle">${short}</text>`;
+    }
+  });
+  el.innerHTML = `<div class="chart-scroll"><svg class="chart-svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${rects}${labels}</svg></div>`;
+}
+
 /* ── /api/history ──────────────────────────────────────────────── */
 async function refreshHistory() {
   try {
@@ -261,10 +352,13 @@ async function refreshHistory() {
 function renderHistory() {
   const tbody = document.getElementById('history-tbody');
 
-  // Apply filter
+  // Apply model filter
   let filtered = currentFilter
     ? allHistory.filter(h => h.model === currentFilter)
     : allHistory;
+
+  // Apply date filter (Today is the default, matching the Overview cards)
+  filtered = filtered.filter(h => inDateRange(h, currentDateFilter));
 
   // Apply search
   if (searchQuery) {
@@ -281,8 +375,9 @@ function renderHistory() {
   // Expose the visible rows so Copy/Download operate on exactly what's shown.
   currentVisibleHistory = filtered;
 
+  const hasFilter = currentFilter || currentDateFilter !== 'all';
   document.getElementById('history-count').textContent =
-    filtered.length + t('status.count') + (currentFilter ? t('status.filtered') : '');
+    filtered.length + t('status.count') + (hasFilter ? t('status.filtered') : '');
 
   if (filtered.length === 0) {
     tbody.innerHTML = '<tr><td colspan="8" class="empty-state">' + t('empty.noHistory') + '</td></tr>';
@@ -324,6 +419,33 @@ document.getElementById('model-filter').addEventListener('change', function() {
   currentFilter = this.value;
   renderHistory();
 });
+
+document.getElementById('date-filter').addEventListener('change', function() {
+  currentDateFilter = this.value;
+  renderHistory();
+});
+
+// Returns true when a record falls inside the selected date range. Day
+// boundaries are computed in local time, matching how the backend buckets
+// records into daily stats.
+function inDateRange(h, range) {
+  if (range === 'all') return true;
+  if (!h.start_time) return false;
+  const d = new Date(h.start_time);
+  if (isNaN(d)) return false;
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  switch (range) {
+    case 'today':
+      return d >= startOfToday;
+    case 'yesterday':
+      return d >= new Date(startOfToday.getTime() - 86400000) && d < startOfToday;
+    case 'last7':
+      return d >= new Date(startOfToday.getTime() - 6 * 86400000);
+    default:
+      return true;
+  }
+}
 
 /* ── /api/config ───────────────────────────────────────────────── */
 async function refreshConfig() {

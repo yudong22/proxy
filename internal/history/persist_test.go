@@ -30,7 +30,7 @@ func TestAppendAndLoadRoundTrip(t *testing.T) {
 		t.Fatalf("appendRecord: %v", err)
 	}
 
-	loaded, err := loadRecords(path)
+	loaded, _, err := loadRecords(path)
 	if err != nil {
 		t.Fatalf("loadRecords: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestAppendAndLoadRoundTrip(t *testing.T) {
 
 func TestLoadMissingFileReturnsEmpty(t *testing.T) {
 	dir := t.TempDir()
-	records, err := loadRecords(filepath.Join(dir, "nope.jsonl"))
+	records, _, err := loadRecords(filepath.Join(dir, "nope.jsonl"))
 	if err != nil {
 		t.Fatalf("loadRecords on missing file: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestLoadSkipsMalformedLines(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	records, err := loadRecords(path)
+	records, _, err := loadRecords(path)
 	if err != nil {
 		t.Fatalf("loadRecords: %v", err)
 	}
