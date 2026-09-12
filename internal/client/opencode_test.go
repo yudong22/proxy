@@ -1,10 +1,16 @@
 package client
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/routatic/proxy/internal/config"
+	"github.com/routatic/proxy/internal/core"
+	"github.com/routatic/proxy/pkg/types"
 )
 
 func TestIsAnthropicModelOnlyRoutesNativeAnthropicModels(t *testing.T) {
@@ -860,5 +866,71 @@ func TestGetProviderAPIKeys_EmptyReturnsGlobal(t *testing.T) {
 	want := []string{"global-single-key"}
 	if len(got) != len(want) || got[0] != want[0] {
 		t.Errorf("getProviderAPIKeys() = %v, want %v (should fallback to global)", got, want)
+	}
+}
+
+func TestOpenCodeClient_SetsOpenCodeSessionHeader(t *testing.T) {
+	var gotSession string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotSession = r.Header.Get(core.OpenCodeSessionHeader)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"resp-1","object":"chat.completion","created":1,"model":"deepseek-v4-pro","choices":[],"usage":{}}`))
+	}))
+	defer ts.Close()
+
+	cfg := &config.Config{
+		APIKey: "test-key",
+		OpenCodeGo: config.OpenCodeGoConfig{
+			BaseURL: ts.URL,
+		},
+	}
+	atomicCfg := config.NewAtomicConfig(cfg, "")
+	c := NewOpenCodeClient(atomicCfg, nil)
+
+	model := config.ModelConfig{Provider: ProviderOpenCodeGo, ModelID: "deepseek-v4-pro"}
+	req := &types.ChatCompletionRequest{
+		Model:    "deepseek-v4-pro",
+		Messages: []types.ChatMessage{{Role: "user", Content: json.RawMessage(`"hello"`)}},
+	}
+	ctx := core.WithSessionID(context.Background(), "client-session-1")
+	if _, err := c.ChatCompletionNonStreaming(ctx, "deepseek-v4-pro", req, model); err != nil {
+		t.Fatalf("ChatCompletionNonStreaming() error = %v", err)
+	}
+
+	if gotSession != "client-session-1" {
+		t.Errorf("%s = %q, want %q", core.OpenCodeSessionHeader, gotSession, "client-session-1")
+	}
+}
+
+func TestOpenCodeClient_ZenOmitsOpenCodeSessionHeader(t *testing.T) {
+	var gotSession string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotSession = r.Header.Get(core.OpenCodeSessionHeader)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"resp-1","object":"chat.completion","created":1,"model":"deepseek-v4-flash-free","choices":[],"usage":{}}`))
+	}))
+	defer ts.Close()
+
+	cfg := &config.Config{
+		APIKey: "test-key",
+		OpenCodeZen: config.OpenCodeZenConfig{
+			BaseURL: ts.URL,
+		},
+	}
+	atomicCfg := config.NewAtomicConfig(cfg, "")
+	c := NewOpenCodeClient(atomicCfg, nil)
+
+	model := config.ModelConfig{Provider: ProviderOpenCodeZen, ModelID: "deepseek-v4-flash-free"}
+	req := &types.ChatCompletionRequest{
+		Model:    "deepseek-v4-flash-free",
+		Messages: []types.ChatMessage{{Role: "user", Content: json.RawMessage(`"hello"`)}},
+	}
+	ctx := core.WithSessionID(context.Background(), "client-session-1")
+	if _, err := c.ChatCompletionNonStreaming(ctx, "deepseek-v4-flash-free", req, model); err != nil {
+		t.Fatalf("ChatCompletionNonStreaming() error = %v", err)
+	}
+
+	if gotSession != "" {
+		t.Errorf("OpenCode Zen must not receive %s, got %q", core.OpenCodeSessionHeader, gotSession)
 	}
 }

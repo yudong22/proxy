@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/routatic/proxy/internal/config"
+	"github.com/routatic/proxy/internal/core"
 	"github.com/routatic/proxy/internal/debug"
 	"github.com/routatic/proxy/internal/models"
 	"github.com/routatic/proxy/pkg/types"
@@ -252,6 +253,16 @@ func IsBedrock(model config.ModelConfig) bool {
 	return Provider(model) == ProviderAWSBedrock
 }
 
+// setOpenCodeSessionHeader forwards the OpenCode session ID from ctx to the
+// upstream request, but only for OpenCode Go models. Zen, Bedrock, and
+// other providers do not receive it.
+func setOpenCodeSessionHeader(h http.Header, ctx context.Context, modelConfig config.ModelConfig) {
+	if Provider(modelConfig) != ProviderOpenCodeGo {
+		return
+	}
+	core.SetOpenCodeSessionHeader(h, ctx)
+}
+
 // EndpointType determines which Zen endpoint format to use.
 type EndpointType int
 
@@ -349,6 +360,7 @@ func (c *OpenCodeClient) ChatCompletion(
 	} else {
 		httpReq.Header.Set("Authorization", "Bearer "+endpoint.APIKey)
 	}
+	setOpenCodeSessionHeader(httpReq.Header, ctx, modelConfig)
 
 	if req.Stream != nil && *req.Stream {
 		httpReq.Header.Set("Accept", "text/event-stream")
@@ -451,6 +463,7 @@ func (c *OpenCodeClient) SendAnthropicRequest(
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+apiKey)
 	httpReq.Header.Set("x-api-key", apiKey)
+	setOpenCodeSessionHeader(httpReq.Header, ctx, modelConfig)
 
 	if stream {
 		httpReq.Header.Set("Accept", "text/event-stream")
@@ -496,6 +509,7 @@ func (c *OpenCodeClient) ResponsesCompletion(
 
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+endpoint.APIKey)
+	setOpenCodeSessionHeader(httpReq.Header, ctx, modelConfig)
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
@@ -593,6 +607,7 @@ func (c *OpenCodeClient) GeminiCompletion(
 
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+endpoint.APIKey)
+	setOpenCodeSessionHeader(httpReq.Header, ctx, modelConfig)
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {

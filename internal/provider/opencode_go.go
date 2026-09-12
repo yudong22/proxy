@@ -192,6 +192,7 @@ func (p *OpenCodeGoProvider) executeAnthropic(ctx context.Context, req *core.Nor
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+apiKey)
 	httpReq.Header.Set("x-api-key", apiKey)
+	core.SetOpenCodeSessionHeader(httpReq.Header, ctx)
 
 	start := time.Now()
 	resp, err := p.httpClient.Do(httpReq)
@@ -236,6 +237,7 @@ func (p *OpenCodeGoProvider) streamAnthropic(ctx context.Context, req *core.Norm
 	httpReq.Header.Set("Authorization", "Bearer "+apiKey)
 	httpReq.Header.Set("x-api-key", apiKey)
 	httpReq.Header.Set("Accept", "text/event-stream")
+	core.SetOpenCodeSessionHeader(httpReq.Header, ctx)
 
 	resp, err := p.httpClient.Do(httpReq)
 	if err != nil {
@@ -265,6 +267,7 @@ func (p *OpenCodeGoProvider) doRequest(ctx context.Context, endpoint, apiKey str
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+apiKey)
+	core.SetOpenCodeSessionHeader(httpReq.Header, ctx)
 	if stream {
 		httpReq.Header.Set("Accept", "text/event-stream")
 	}
