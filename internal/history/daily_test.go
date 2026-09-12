@@ -9,8 +9,10 @@ import (
 
 func TestDailyAggregatesPerDay(t *testing.T) {
 	h := New(100)
-	loc := time.Now().Location()
-	today := time.Date(2026, 8, 16, 10, 0, 0, 0, loc)
+	// Anchor the fixture to the current local day: Daily() windows off the real
+	// time.Now(), so a hardcoded date stops matching the window the next day.
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 10, 0, 0, 0, now.Location())
 	yesterday := today.AddDate(0, 0, -1)
 
 	h.Add(RequestRecord{
@@ -90,8 +92,10 @@ func TestDailyRebuildsOnLoadFromFile(t *testing.T) {
 
 	h := New(100)
 	h.SetPersistPath(path)
-	loc := time.Now().Location()
-	day := time.Date(2026, 8, 16, 9, 0, 0, 0, loc)
+	// As in TestDailyAggregatesPerDay: Daily(1) below means "today", so the
+	// records must be stamped relative to the real clock.
+	now := time.Now()
+	day := time.Date(now.Year(), now.Month(), now.Day(), 9, 0, 0, 0, now.Location())
 	h.Add(RequestRecord{Model: "a", StartTime: day, InputTokens: 5, Success: true})
 	h.Add(RequestRecord{Model: "b", StartTime: day, InputTokens: 7, Success: false})
 
